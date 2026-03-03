@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: options-trading-api
+    runtime: go
+    region: oregon
+    plan: starter
+    buildCommand: cd backend && go build -o server .
+    startCommand: cd backend && ./server
+    autoDeploy: true
+    envVars:
+      - key: ALPACA_API_KEY
+        sync: false
+      - key: ALPACA_API_SECRET
+        sync: false
+      - key: ALPACA_BASE_URL
+        value: https://paper-api.alpaca.markets
+      - key: PORT
+        value: "8080"
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+  - type: web
+    name: options-trading-ui
+    runtime: static
+    region: oregon
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    autoDeploy: true
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_WS_URL
+        sync: false

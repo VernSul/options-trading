@@ -6,7 +6,7 @@ import { showToast } from "../common/Toast";
 
 export function PositionsPanel() {
   const { positions, loading, fetchPositions } = usePositionStore();
-  const { closePosition, closeAllPositions } = useWSStore();
+  const { closePosition, closeAllPositions, cancelAllOrders } = useWSStore();
 
   useEffect(() => {
     fetchPositions();
@@ -18,8 +18,9 @@ export function PositionsPanel() {
   };
 
   const handleCloseAll = () => {
+    cancelAllOrders();
     closeAllPositions();
-    showToast("Closing all positions", "info");
+    showToast("Cancelling orders & closing all positions", "info");
   };
 
   return (

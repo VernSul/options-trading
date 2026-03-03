@@ -30,15 +30,18 @@ export function OptionsChain({ onSelectContract, onAutoSelect, onChainReady }: P
   const [spotPrice, setSpotPrice] = useState<number | null>(null);
   const atmRowRef = useRef<HTMLTableRowElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const shouldScrollRef = useRef(true);
+  const hasScrolledRef = useRef(false);
 
-  // Only scroll when symbol changes
+  // Reset spot price and scroll flag when symbol changes
   useEffect(() => {
-    shouldScrollRef.current = true;
+    setSpotPrice(null);
+    hasScrolledRef.current = false;
   }, [currentSymbol]);
 
-  // Resolve spot price: from latestQuote, last bar, or REST fallback
+  // Resolve spot price ONCE per symbol (not continuously from quotes)
   useEffect(() => {
+    if (spotPrice !== null) return; // Already have a price for this symbol
+
     if (latestQuote) {
       const mid = (latestQuote.bidPrice + latestQuote.askPrice) / 2;
       if (mid > 0) {
@@ -57,7 +60,7 @@ export function OptionsChain({ onSelectContract, onAutoSelect, onChainReady }: P
         if (mid > 0) setSpotPrice(mid);
       }
     }).catch(() => {});
-  }, [currentSymbol, latestQuote, bars]);
+  }, [currentSymbol, latestQuote, bars, spotPrice]);
 
   // Auto-fetch chain on symbol/spotPrice/settings change (debounced)
   useEffect(() => {
@@ -113,13 +116,13 @@ export function OptionsChain({ onSelectContract, onAutoSelect, onChainReady }: P
     }
   }, [chain, spotPrice, selectedExpiration, handleAutoSelect, onChainReady]);
 
-  // Auto-scroll to ATM row only on symbol change
+  // Auto-scroll to ATM row once after chain loads for a new symbol
   useEffect(() => {
-    if (shouldScrollRef.current && atmRowRef.current) {
+    if (!hasScrolledRef.current && atmRowRef.current && Object.keys(chain).length > 0) {
       atmRowRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
-      shouldScrollRef.current = false;
+      hasScrolledRef.current = true;
     }
-  }, [chain, spotPrice]);
+  }, [chain]);
 
   // Group by strike, separate calls and puts
   const entries = Object.entries(chain);
@@ -163,9 +166,14 @@ export function OptionsChain({ onSelectContract, onAutoSelect, onChainReady }: P
     <div className="options-chain">
       <div className="chain-controls">
         <h3>Options Chain — {currentSymbol}</h3>
-        {spotPrice && (
-          <span className="spot-label">Spot: ${spotPrice.toFixed(2)}</span>
-        )}
+        {(() => {
+          const livePrice = latestQuote
+            ? (latestQuote.bidPrice + latestQuote.askPrice) / 2
+            : spotPrice;
+          return livePrice ? (
+            <span className="spot-label">Spot: ${livePrice.toFixed(2)}</span>
+          ) : null;
+        })()}
         {availableExpirations.length > 0 && (
           <select
             className="select"

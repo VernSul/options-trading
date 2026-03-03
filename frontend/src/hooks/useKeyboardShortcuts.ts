@@ -124,8 +124,9 @@ export function useKeyboardShortcuts(
     hotkeys("s", (e) => {
       if (isInput(e)) return;
       e.preventDefault();
+      useWSStore.getState().cancelAllOrders();
       useWSStore.getState().closeAllPositions();
-      showToast("Closing all positions", "info");
+      showToast("Selling all: cancelling orders & closing positions", "info");
     });
 
     hotkeys("x", (e) => {

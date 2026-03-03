@@ -14,14 +14,14 @@ const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8080/ws";
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const currentSymbolRef = useRef(useMarketStore.getState().currentSymbol);
 
-  const { addBar, setLatestQuote, setOptionQuote, currentSymbol } =
-    useMarketStore();
-  const { updateOrder, fetchOrders, addOrder } = useOrderStore();
-  const { setPositions, fetchPositions } = usePositionStore();
-  const { fetchAccount } = useAccountStore();
-  const { markTriggered } = useCrossingStore();
-  const { setActions } = useWSStore();
+  // Keep symbol ref in sync
+  useEffect(() => {
+    return useMarketStore.subscribe((state) => {
+      currentSymbolRef.current = state.currentSymbol;
+    });
+  }, []);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -31,40 +31,22 @@ export function useWebSocket() {
 
     ws.onopen = () => {
       console.log("WS connected");
-      // Subscribe to current symbol bars + quotes
-      if (currentSymbol) {
-        ws.send(
-          JSON.stringify({
-            type: "subscribe",
-            symbols: [currentSymbol],
-            channel: "bars",
-          })
-        );
-        ws.send(
-          JSON.stringify({
-            type: "subscribe",
-            symbols: [currentSymbol],
-            channel: "quotes",
-          })
-        );
+      const sym = currentSymbolRef.current;
+      if (sym) {
+        ws.send(JSON.stringify({ type: "subscribe", symbols: [sym], channel: "bars" }));
+        ws.send(JSON.stringify({ type: "subscribe", symbols: [sym], channel: "quotes" }));
       }
 
       // Populate WS action store
-      setActions({
+      useWSStore.getState().setActions({
         sendOrder: (order: SmartOrderRequest) => {
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: "place_order",
-              payload: order,
-            }));
+            ws.send(JSON.stringify({ type: "place_order", payload: order }));
           }
         },
         cancelOrder: (id: string) => {
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: "cancel_order",
-              payload: { orderId: id },
-            }));
+            ws.send(JSON.stringify({ type: "cancel_order", payload: { orderId: id } }));
           }
         },
         cancelAllOrders: () => {
@@ -74,10 +56,7 @@ export function useWebSocket() {
         },
         closePosition: (symbol: string, qty?: string) => {
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: "close_position",
-              payload: { symbol, qty },
-            }));
+            ws.send(JSON.stringify({ type: "close_position", payload: { symbol, qty } }));
           }
         },
         closeAllPositions: () => {
@@ -93,25 +72,25 @@ export function useWebSocket() {
         const msg: WSMessage = JSON.parse(event.data);
         switch (msg.type) {
           case "bar":
-            addBar(normalizeBar(msg.payload));
+            useMarketStore.getState().addBar(normalizeBar(msg.payload));
             break;
           case "stock_quote":
-            setLatestQuote(normalizeStockQuote(msg.payload));
+            useMarketStore.getState().setLatestQuote(normalizeStockQuote(msg.payload));
             break;
           case "option_quote":
-            setOptionQuote(normalizeOptionQuote(msg.payload));
+            useMarketStore.getState().setOptionQuote(normalizeOptionQuote(msg.payload));
             break;
           case "trade_update": {
             const tu = msg.payload as TradeUpdate;
-            updateOrder(tu.order);
+            useOrderStore.getState().updateOrder(tu.order);
             if (tu.event === "fill" || tu.event === "canceled") {
-              fetchOrders();
+              useOrderStore.getState().fetchOrders();
             }
             break;
           }
           case "order_placed": {
             const order = msg.payload as Order;
-            addOrder(order);
+            useOrderStore.getState().addOrder(order);
             break;
           }
           case "order_error": {
@@ -121,7 +100,7 @@ export function useWebSocket() {
           }
           case "positions_update": {
             const positions = msg.payload as Position[];
-            setPositions(positions);
+            usePositionStore.getState().setPositions(positions);
             break;
           }
           case "account_update": {
@@ -131,7 +110,7 @@ export function useWebSocket() {
           }
           case "crossing_triggered": {
             const data = msg.payload as { alert: { id: string } };
-            markTriggered(data.alert.id);
+            useCrossingStore.getState().markTriggered(data.alert.id);
             break;
           }
           case "heartbeat":
@@ -153,21 +132,11 @@ export function useWebSocket() {
       console.error("WS error:", err);
       ws.close();
     };
-  }, [
-    addBar,
-    setLatestQuote,
-    setOptionQuote,
-    updateOrder,
-    fetchOrders,
-    addOrder,
-    setPositions,
-    fetchPositions,
-    fetchAccount,
-    markTriggered,
-    currentSymbol,
-    setActions,
-  ]);
+  // No deps — connect once, use store.getState() for all state reads
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Connect once on mount
   useEffect(() => {
     connect();
     return () => {
@@ -175,6 +144,23 @@ export function useWebSocket() {
       wsRef.current?.close();
     };
   }, [connect]);
+
+  // Re-subscribe when symbol changes
+  useEffect(() => {
+    return useMarketStore.subscribe((state, prev) => {
+      if (state.currentSymbol !== prev.currentSymbol && wsRef.current?.readyState === WebSocket.OPEN) {
+        const ws = wsRef.current;
+        // Unsubscribe old
+        if (prev.currentSymbol) {
+          ws.send(JSON.stringify({ type: "unsubscribe", symbols: [prev.currentSymbol], channel: "bars" }));
+          ws.send(JSON.stringify({ type: "unsubscribe", symbols: [prev.currentSymbol], channel: "quotes" }));
+        }
+        // Subscribe new
+        ws.send(JSON.stringify({ type: "subscribe", symbols: [state.currentSymbol], channel: "bars" }));
+        ws.send(JSON.stringify({ type: "subscribe", symbols: [state.currentSymbol], channel: "quotes" }));
+      }
+    });
+  }, []);
 
   const send = useCallback(
     (type: string, symbols: string[], channel: string) => {

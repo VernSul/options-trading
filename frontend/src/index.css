@@ -571,6 +571,136 @@ body {
   font-family: inherit;
 }
 
+/* ATM Row Highlight */
+.atm-row {
+  background: rgba(99, 102, 241, 0.12);
+  border-left: 2px solid var(--accent);
+}
+
+.atm-row .strike {
+  color: var(--accent);
+}
+
+/* Spot Label */
+.spot-label {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Settings Panel */
+.settings-panel .panel-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapse-icon {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.setting-item .input,
+.setting-item .select {
+  width: 70px;
+  flex: none;
+  font-size: 11px;
+}
+
+/* Timeframe Buttons */
+.timeframe-buttons {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.btn-active {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #fff !important;
+}
+
+/* Dollar Input */
+.dollar-input-label {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Computed Values */
+.computed-qty {
+  font-size: 11px;
+  color: var(--accent);
+  padding: 2px 0 4px;
+}
+
+.computed-value {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.sl-config {
+  flex-wrap: wrap;
+}
+
+/* P&L Projection */
+.pnl-projection {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pnl-projection h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pnl-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.pnl-projection .panel-table td {
+  font-size: 11px;
+  text-align: right;
+}
+
+.pnl-projection .panel-table th {
+  text-align: right;
+  font-size: 11px;
+}
+
+.pnl-projection tr.positive td {
+  color: var(--green);
+}
+
+.pnl-projection tr.negative td {
+  color: var(--red);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

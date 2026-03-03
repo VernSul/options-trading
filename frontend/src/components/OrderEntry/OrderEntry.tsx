@@ -1,42 +1,86 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { rest } from "../../api/rest";
 import { useOrderStore } from "../../stores/useOrderStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import type { SmartOrderRequest } from "../../types";
 
 interface Props {
   prefillSymbol?: string;
   prefillSide?: "buy" | "sell";
+  autoSelectedSymbol?: string;
+  autoAskPrice?: number;
 }
 
-export function OrderEntry({ prefillSymbol, prefillSide }: Props) {
-  const [symbol, setSymbol] = useState(prefillSymbol || "");
-  const [qty, setQty] = useState(1);
+export function OrderEntry({
+  prefillSymbol,
+  prefillSide,
+  autoSelectedSymbol,
+  autoAskPrice,
+}: Props) {
+  const settings = useSettingsStore();
+  const { fetchOrders } = useOrderStore();
+
+  const [symbol, setSymbol] = useState(prefillSymbol || autoSelectedSymbol || "");
   const [side, setSide] = useState<string>(prefillSide || "buy");
   const [orderType, setOrderType] = useState("market");
   const [positionIntent, setPositionIntent] = useState("buy_to_open");
   const [limitPrice, setLimitPrice] = useState("");
-  const [enableStopLoss, setEnableStopLoss] = useState(false);
-  const [stopPrice, setStopPrice] = useState("");
-  const [stopLimitPrice, setStopLimitPrice] = useState("");
+  const [dollarAmount, setDollarAmount] = useState(settings.dollarAmount);
+  const [enableStopLoss, setEnableStopLoss] = useState(true);
+  const [stopLossPercent, setStopLossPercent] = useState(
+    settings.stopLossPercent * 100
+  );
   const [enableTrailing, setEnableTrailing] = useState(false);
-  const [trailAmount, setTrailAmount] = useState("");
+  const [trailingPercent, setTrailingPercent] = useState(
+    settings.trailingStopPercent * 100
+  );
   const [safetyStop, setSafetyStop] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { fetchOrders } = useOrderStore();
 
-  // Update prefill when props change
-  if (prefillSymbol && prefillSymbol !== symbol) setSymbol(prefillSymbol);
-  if (prefillSide && prefillSide !== side) setSide(prefillSide);
+  // Update symbol from prefill or auto-selection
+  useEffect(() => {
+    if (prefillSymbol) setSymbol(prefillSymbol);
+    else if (autoSelectedSymbol) setSymbol(autoSelectedSymbol);
+  }, [prefillSymbol, autoSelectedSymbol]);
+
+  useEffect(() => {
+    if (prefillSide) setSide(prefillSide);
+  }, [prefillSide]);
+
+  // Estimated entry price
+  const entryPrice = autoAskPrice ?? (limitPrice ? parseFloat(limitPrice) : 0);
+
+  // Compute qty from dollar amount
+  const computedQty =
+    entryPrice > 0 ? Math.floor(dollarAmount / (entryPrice * 100)) : 0;
+
+  // Compute absolute stop price
+  const computedStopPrice =
+    entryPrice > 0 && enableStopLoss
+      ? entryPrice * (1 - stopLossPercent / 100)
+      : 0;
+
+  // Compute trail amount
+  const computedTrailAmount =
+    entryPrice > 0 && enableTrailing
+      ? entryPrice * (trailingPercent / 100)
+      : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (computedQty < 1) {
+      setError("Computed qty is 0 — increase $ amount or check ask price");
+      return;
+    }
+
     setSubmitting(true);
 
     const order: SmartOrderRequest = {
       symbol,
-      qty,
+      qty: computedQty,
       side,
       type: orderType,
       positionIntent,
@@ -47,23 +91,23 @@ export function OrderEntry({ prefillSymbol, prefillSide }: Props) {
       order.limitPrice = limitPrice;
     }
 
-    if (enableStopLoss && stopPrice) {
+    if (enableStopLoss && computedStopPrice > 0) {
       order.stopLoss = {
-        stopPrice,
-        ...(stopLimitPrice ? { limitPrice: stopLimitPrice } : {}),
+        stopPrice: computedStopPrice.toFixed(2),
       };
     }
 
-    if (enableTrailing && trailAmount && safetyStop) {
-      order.trailingStop = { trailAmount, safetyStop };
+    if (enableTrailing && computedTrailAmount > 0) {
+      order.trailingStop = {
+        trailAmount: computedTrailAmount.toFixed(2),
+        safetyStop: safetyStop || (entryPrice * 0.8).toFixed(2),
+      };
     }
 
     try {
       await rest.placeOrder(order);
       fetchOrders();
-      setSymbol("");
-      setLimitPrice("");
-      setStopPrice("");
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Order failed");
     } finally {
@@ -109,14 +153,16 @@ export function OrderEntry({ prefillSymbol, prefillSide }: Props) {
       </div>
 
       <div className="form-row">
-        <label>
-          Qty
+        <label className="dollar-input-label">
+          $
           <input
             type="number"
-            value={qty}
-            onChange={(e) => setQty(parseInt(e.target.value) || 1)}
+            value={dollarAmount}
+            onChange={(e) => setDollarAmount(parseInt(e.target.value) || 0)}
             min={1}
-            className="input qty-input"
+            step={100}
+            className="input"
+            style={{ width: 80 }}
           />
         </label>
 
@@ -140,7 +186,13 @@ export function OrderEntry({ prefillSymbol, prefillSide }: Props) {
         )}
       </div>
 
-      <div className="form-row checkbox-row">
+      {entryPrice > 0 && (
+        <div className="computed-qty">
+          = {computedQty} contracts @ ${entryPrice.toFixed(2)}
+        </div>
+      )}
+
+      <div className="form-row checkbox-row sl-config">
         <label>
           <input
             type="checkbox"
@@ -152,47 +204,63 @@ export function OrderEntry({ prefillSymbol, prefillSide }: Props) {
         {enableStopLoss && (
           <>
             <input
-              type="text"
-              value={stopPrice}
-              onChange={(e) => setStopPrice(e.target.value)}
-              placeholder="Stop price"
+              type="number"
+              value={stopLossPercent}
+              onChange={(e) =>
+                setStopLossPercent(parseFloat(e.target.value) || 0)
+              }
+              min={0}
+              max={100}
+              step={5}
               className="input"
+              style={{ width: 60 }}
             />
-            <input
-              type="text"
-              value={stopLimitPrice}
-              onChange={(e) => setStopLimitPrice(e.target.value)}
-              placeholder="Limit (optional)"
-              className="input"
-            />
+            <span>%</span>
+            {computedStopPrice > 0 && (
+              <span className="computed-value">
+                = ${computedStopPrice.toFixed(2)}
+              </span>
+            )}
           </>
         )}
       </div>
 
-      <div className="form-row checkbox-row">
+      <div className="form-row checkbox-row sl-config">
         <label>
           <input
             type="checkbox"
             checked={enableTrailing}
             onChange={(e) => setEnableTrailing(e.target.checked)}
           />
-          Trailing Stop
+          Trailing
         </label>
         {enableTrailing && (
           <>
             <input
-              type="text"
-              value={trailAmount}
-              onChange={(e) => setTrailAmount(e.target.value)}
-              placeholder="Trail amount ($)"
+              type="number"
+              value={trailingPercent}
+              onChange={(e) =>
+                setTrailingPercent(parseFloat(e.target.value) || 0)
+              }
+              min={0}
+              max={100}
+              step={5}
               className="input"
+              style={{ width: 60 }}
             />
+            <span>%</span>
+            {computedTrailAmount > 0 && (
+              <span className="computed-value">
+                = ${computedTrailAmount.toFixed(2)}
+              </span>
+            )}
             <input
               type="text"
               value={safetyStop}
               onChange={(e) => setSafetyStop(e.target.value)}
-              placeholder="Safety stop ($)"
+              placeholder="Safety $"
               className="input"
+              style={{ width: 70 }}
             />
           </>
         )}
@@ -202,12 +270,12 @@ export function OrderEntry({ prefillSymbol, prefillSide }: Props) {
 
       <button
         type="submit"
-        disabled={submitting || !symbol}
+        disabled={submitting || !symbol || computedQty < 1}
         className={`btn btn-order ${side === "buy" ? "btn-buy" : "btn-sell"}`}
       >
         {submitting
           ? "Submitting..."
-          : `${side.toUpperCase()} ${qty} ${symbol || "..."}`}
+          : `${side.toUpperCase()} ${computedQty} ${symbol || "..."}`}
       </button>
     </form>
   );

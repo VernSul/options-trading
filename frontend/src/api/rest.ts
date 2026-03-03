@@ -48,6 +48,11 @@ export const rest = {
 
   cancelAllOrders: () => request<void>("/api/orders", { method: "DELETE" }),
 
+  getQuote: (symbol: string) =>
+    request<{ bp: number; ap: number; bs: number; as: number; t: string }>(
+      `/api/quote/${encodeURIComponent(symbol)}`
+    ),
+
   getOptionChain: (symbol: string, params?: Record<string, string>) => {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
     return request<OptionChain>(

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createChart,
   CandlestickSeries,
@@ -9,9 +9,19 @@ import {
   ColorType,
 } from "lightweight-charts";
 import { useMarketStore } from "../../stores/useMarketStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { rest } from "../../api/rest";
 import { normalizeBars } from "../../utils/normalize";
 import type { Bar } from "../../types";
+import type { Timeframe } from "../../stores/useSettingsStore";
+
+const TIMEFRAMES: { label: string; value: Timeframe }[] = [
+  { label: "1m", value: "1Min" },
+  { label: "5m", value: "5Min" },
+  { label: "15m", value: "15Min" },
+  { label: "1H", value: "1H" },
+  { label: "1D", value: "1D" },
+];
 
 function barToCandle(bar: Bar): CandlestickData<Time> {
   return {
@@ -29,6 +39,8 @@ export function Chart() {
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
 
   const { currentSymbol, bars, setBars } = useMarketStore();
+  const { defaultTimeframe } = useSettingsStore();
+  const [timeframe, setTimeframe] = useState<Timeframe>(defaultTimeframe);
 
   // Create chart
   useEffect(() => {
@@ -80,13 +92,13 @@ export function Chart() {
     };
   }, []);
 
-  // Load bars on symbol change
+  // Load bars on symbol or timeframe change
   useEffect(() => {
     if (!currentSymbol) return;
-    rest.getBars(currentSymbol, "5Min").then((data) => {
+    rest.getBars(currentSymbol, timeframe).then((data) => {
       if (data) setBars(normalizeBars(data));
     });
-  }, [currentSymbol, setBars]);
+  }, [currentSymbol, timeframe, setBars]);
 
   // Update chart data
   useEffect(() => {
@@ -114,6 +126,17 @@ export function Chart() {
             {bars[bars.length - 1].close.toFixed(2)}
           </span>
         )}
+        <div className="timeframe-buttons">
+          {TIMEFRAMES.map((tf) => (
+            <button
+              key={tf.value}
+              className={`btn btn-small ${timeframe === tf.value ? "btn-active" : ""}`}
+              onClick={() => setTimeframe(tf.value)}
+            >
+              {tf.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div ref={containerRef} style={{ width: "100%", height: "400px" }} />
     </div>

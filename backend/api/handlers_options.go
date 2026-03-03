@@ -12,6 +12,17 @@ import (
 	"github.com/alpacahq/alpaca-trade-api-go/v3/marketdata"
 )
 
+func (s *Server) HandleGetQuote(w http.ResponseWriter, r *http.Request) {
+	symbol := chi.URLParam(r, "symbol")
+
+	quote, err := s.Alpaca.GetLatestQuote(symbol)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(quote)
+}
+
 func (s *Server) HandleGetOptionChain(w http.ResponseWriter, r *http.Request) {
 	symbol := chi.URLParam(r, "symbol")
 

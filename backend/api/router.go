@@ -60,6 +60,7 @@ func (s *Server) Router() http.Handler {
 		r.Get("/crossing", s.HandleGetCrossings)
 		r.Delete("/crossing/{id}", s.HandleDeleteCrossing)
 		r.Get("/bars/{symbol}", s.HandleGetBars)
+		r.Get("/quote/{symbol}", s.HandleGetQuote)
 	})
 
 	r.Get("/ws", s.HandleWebSocket)

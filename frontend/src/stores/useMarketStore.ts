@@ -14,7 +14,7 @@ interface MarketState {
 }
 
 export const useMarketStore = create<MarketState>((set) => ({
-  currentSymbol: "AAPL",
+  currentSymbol: "SPY",
   bars: [],
   latestQuote: null,
   optionQuotes: {},

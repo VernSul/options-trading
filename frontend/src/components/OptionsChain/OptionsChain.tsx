@@ -28,7 +28,7 @@ export function OptionsChain({ onSelectContract, onAutoSelect }: Props) {
 
   const [spotPrice, setSpotPrice] = useState<number | null>(null);
   const atmRowRef = useRef<HTMLTableRowElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Resolve spot price: from latestQuote, last bar, or REST fallback
   useEffect(() => {

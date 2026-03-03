@@ -49,8 +49,8 @@ export function useOptionsChain(): UseOptionsChainResult {
 
         const fmt = (d: Date) => d.toISOString().split("T")[0];
 
-        // Strike range: ±5% of spot
-        const strikePad = spotPrice * 0.05;
+        // Strike range based on chainStrikesRange setting
+        const strikePad = spotPrice * (chainStrikesRange / 100);
 
         const params: Record<string, string> = {
           expiration_gte: fmt(gte),

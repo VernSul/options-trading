@@ -68,58 +68,66 @@ export function useWebSocket() {
     };
 
     ws.onmessage = (event) => {
+      let msg: WSMessage;
       try {
-        const msg: WSMessage = JSON.parse(event.data);
-        switch (msg.type) {
-          case "bar":
-            useMarketStore.getState().addBar(normalizeBar(msg.payload));
-            break;
-          case "stock_quote":
-            useMarketStore.getState().setLatestQuote(normalizeStockQuote(msg.payload));
-            break;
-          case "option_quote":
-            useMarketStore.getState().setOptionQuote(normalizeOptionQuote(msg.payload));
-            break;
-          case "trade_update": {
-            const tu = msg.payload as TradeUpdate;
+        msg = JSON.parse(event.data);
+      } catch (e) {
+        console.error("WS JSON parse error:", e);
+        return;
+      }
+
+      // Dispatch store updates via queueMicrotask to decouple from
+      // React's synchronous re-renders (prevents React errors from
+      // propagating into the WS onmessage handler)
+      switch (msg.type) {
+        case "bar":
+          queueMicrotask(() => useMarketStore.getState().addBar(normalizeBar(msg.payload)));
+          break;
+        case "stock_quote":
+          queueMicrotask(() => useMarketStore.getState().setLatestQuote(normalizeStockQuote(msg.payload)));
+          break;
+        case "option_quote":
+          queueMicrotask(() => useMarketStore.getState().setOptionQuote(normalizeOptionQuote(msg.payload)));
+          break;
+        case "trade_update": {
+          const tu = msg.payload as TradeUpdate;
+          queueMicrotask(() => {
             useOrderStore.getState().updateOrder(tu.order);
             if (tu.event === "fill" || tu.event === "canceled") {
               useOrderStore.getState().fetchOrders();
             }
-            break;
-          }
-          case "order_placed": {
-            const order = msg.payload as Order;
-            useOrderStore.getState().addOrder(order);
-            break;
-          }
-          case "order_error": {
-            const errData = msg.payload as { error: string; symbol?: string };
-            showToast(`Order error: ${errData.error}`, "error");
-            break;
-          }
-          case "positions_update": {
-            const positions = msg.payload as Position[];
-            usePositionStore.getState().setPositions(positions);
-            break;
-          }
-          case "account_update": {
-            const account = msg.payload as Account;
-            useAccountStore.setState({ account });
-            break;
-          }
-          case "crossing_triggered": {
-            const data = msg.payload as { alert: { id: string } };
-            useCrossingStore.getState().markTriggered(data.alert.id);
-            break;
-          }
-          case "heartbeat":
-            break;
-          default:
-            break;
+          });
+          break;
         }
-      } catch (e) {
-        console.error("WS message parse error:", e);
+        case "order_placed": {
+          const order = msg.payload as Order;
+          queueMicrotask(() => useOrderStore.getState().addOrder(order));
+          break;
+        }
+        case "order_error": {
+          const errData = msg.payload as { error: string; symbol?: string };
+          showToast(`Order error: ${errData.error}`, "error");
+          break;
+        }
+        case "positions_update": {
+          const positions = msg.payload as Position[];
+          queueMicrotask(() => usePositionStore.getState().setPositions(positions));
+          break;
+        }
+        case "account_update": {
+          const account = msg.payload as Account;
+          queueMicrotask(() => useAccountStore.setState({ account }));
+          break;
+        }
+        case "crossing_triggered": {
+          const data = msg.payload as { alert: { id: string } };
+          queueMicrotask(() => useCrossingStore.getState().markTriggered(data.alert.id));
+          break;
+        }
+        case "heartbeat":
+          break;
+        default:
+          break;
       }
     };
 

@@ -17,11 +17,11 @@ export function StatusBar() {
         )}
       </span>
       <span className="status-item shortcuts-legend">
-        <kbd>B</kbd> Buy Call
+        <kbd>B</kbd> Call
         {" | "}
-        <kbd>P</kbd> Buy Put
+        <kbd>P</kbd> Put
         {" | "}
-        <kbd>S</kbd> Sell All
+        <kbd>S</kbd> Sell
         {" | "}
         <kbd>?</kbd> Help
       </span>

@@ -118,14 +118,43 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     });
   }, [currentSymbol, timeframe, setBars]);
 
+  // Live price update from quotes (update last candle's close)
+  useEffect(() => {
+    if (!seriesRef.current || !latestQuote || bars.length === 0) return;
+    const mid = (latestQuote.bidPrice + latestQuote.askPrice) / 2;
+    if (mid <= 0) return;
+    const lastBar = bars[bars.length - 1];
+    seriesRef.current.update({
+      time: (new Date(lastBar.timestamp).getTime() / 1000) as Time,
+      open: lastBar.open,
+      high: Math.max(lastBar.high, mid),
+      low: Math.min(lastBar.low, mid),
+      close: mid,
+    });
+  }, [latestQuote, bars]);
+
+  // Track previous bars length to distinguish full load from live updates
+  const prevBarsLenRef = useRef(0);
+
   // Update chart data
   useEffect(() => {
     if (!seriesRef.current || bars.length === 0) return;
-    const candles = bars.map(barToCandle);
-    seriesRef.current.setData(candles);
-    if (shouldFitRef.current) {
-      chartRef.current?.timeScale().fitContent();
-      shouldFitRef.current = false;
+
+    const prevLen = prevBarsLenRef.current;
+    prevBarsLenRef.current = bars.length;
+
+    // Full load (symbol/timeframe change) or first load
+    if (shouldFitRef.current || prevLen === 0) {
+      const candles = bars.map(barToCandle);
+      seriesRef.current.setData(candles);
+      if (shouldFitRef.current) {
+        chartRef.current?.timeScale().fitContent();
+        shouldFitRef.current = false;
+      }
+    } else {
+      // Live update — just update the last candle
+      const lastBar = bars[bars.length - 1];
+      seriesRef.current.update(barToCandle(lastBar));
     }
   }, [bars]);
 

@@ -1,10 +1,10 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useRef } from "react";
 import hotkeys from "hotkeys-js";
-import { useOrderStore } from "../stores/useOrderStore";
-import { usePositionStore } from "../stores/usePositionStore";
 import { useMarketStore } from "../stores/useMarketStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { useWSStore } from "../stores/useWSStore";
+import { useOrderStore } from "../stores/useOrderStore";
+import { usePositionStore } from "../stores/usePositionStore";
 import { showToast } from "../components/common/Toast";
 import type { SmartOrderRequest } from "../types";
 
@@ -20,143 +20,153 @@ interface AutoOption {
   strike: number;
 }
 
+function buildOrder(option: AutoOption): SmartOrderRequest | null {
+  const settings = useSettingsStore.getState();
+  const entryPrice = option.askPrice;
+  if (entryPrice <= 0) return null;
+
+  const qty = Math.floor(settings.dollarAmount / (entryPrice * 100));
+  if (qty < 1) return null;
+
+  const order: SmartOrderRequest = {
+    symbol: option.symbol,
+    qty,
+    side: "buy",
+    type: "market",
+    positionIntent: "buy_to_open",
+    timeInForce: "day",
+  };
+
+  if (settings.stopLossPercent > 0) {
+    order.stopLoss = {
+      stopPrice: (entryPrice * (1 - settings.stopLossPercent)).toFixed(2),
+    };
+  }
+
+  if (settings.trailingStartPercent > 0 && settings.trailingOffsetPercent > 0) {
+    order.trailingStop = {
+      trailAmount: (entryPrice * settings.trailingOffsetPercent).toFixed(2),
+      safetyStop: (
+        entryPrice * (1 - settings.trailingStartPercent - settings.trailingOffsetPercent)
+      ).toFixed(2),
+    };
+  }
+
+  return order;
+}
+
 export function useKeyboardShortcuts(
   onShowHelp: () => void,
   qtyRef: React.MutableRefObject<number>,
   autoCallOption: AutoOption | null,
   autoPutOption: AutoOption | null,
 ) {
-  const { cancelAllOrders } = useOrderStore();
-  const { positions, fetchPositions } = usePositionStore();
-  const { currentSymbol, setSymbol } = useMarketStore();
-  const symbolIndexRef = useRef(SYMBOLS.indexOf(currentSymbol));
+  // Store all changing values in refs so hotkeys handlers always see latest
+  const callRef = useRef(autoCallOption);
+  const putRef = useRef(autoPutOption);
+  const showHelpRef = useRef(onShowHelp);
+  const symbolIndexRef = useRef(SYMBOLS.indexOf(useMarketStore.getState().currentSymbol));
 
-  const buildOrder = useCallback(
-    (option: AutoOption): SmartOrderRequest | null => {
-      const settings = useSettingsStore.getState();
-      const entryPrice = option.askPrice;
-      if (entryPrice <= 0) return null;
+  // Keep refs in sync
+  useEffect(() => { callRef.current = autoCallOption; }, [autoCallOption]);
+  useEffect(() => { putRef.current = autoPutOption; }, [autoPutOption]);
+  useEffect(() => { showHelpRef.current = onShowHelp; }, [onShowHelp]);
 
-      const qty = Math.floor(settings.dollarAmount / (entryPrice * 100));
-      if (qty < 1) return null;
-
-      const order: SmartOrderRequest = {
-        symbol: option.symbol,
-        qty,
-        side: "buy",
-        type: "market",
-        positionIntent: "buy_to_open",
-        timeInForce: "day",
-      };
-
-      if (settings.stopLossPercent > 0) {
-        order.stopLoss = {
-          stopPrice: (entryPrice * (1 - settings.stopLossPercent)).toFixed(2),
-        };
-      }
-
-      if (settings.trailingStartPercent > 0 && settings.trailingOffsetPercent > 0) {
-        order.trailingStop = {
-          trailAmount: (entryPrice * settings.trailingOffsetPercent).toFixed(2),
-          safetyStop: (
-            entryPrice * (1 - settings.trailingStartPercent - settings.trailingOffsetPercent)
-          ).toFixed(2),
-        };
-      }
-
-      return order;
-    },
-    []
-  );
-
+  // Register hotkeys ONCE on mount, read latest values from refs/stores
   useEffect(() => {
-    hotkeys.filter = () => true; // Allow in inputs too for Escape
+    hotkeys.filter = () => true;
+
+    const isInput = (e: KeyboardEvent) =>
+      (e.target as HTMLElement).tagName === "INPUT" ||
+      (e.target as HTMLElement).tagName === "TEXTAREA" ||
+      (e.target as HTMLElement).tagName === "SELECT";
 
     hotkeys("escape", (e) => {
       e.preventDefault();
-      cancelAllOrders();
+      useOrderStore.getState().cancelAllOrders();
       showToast("Cancelled all orders", "info");
     });
 
-    hotkeys("x", (e) => {
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
-      e.preventDefault();
-      const wsActions = useWSStore.getState();
-      const pos = positions.find((p) => p.symbol.startsWith(currentSymbol));
-      if (!pos) {
-        showToast("No position to close for " + currentSymbol, "error");
-        return;
-      }
-      wsActions.closePosition(pos.symbol);
-      showToast(`Closing: ${pos.symbol}`, "info");
-    });
-
     hotkeys("b", (e) => {
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      if (isInput(e)) return;
       e.preventDefault();
-      if (!autoCallOption) {
+      const opt = callRef.current;
+      if (!opt) {
         showToast("No call option selected", "error");
         return;
       }
-      const order = buildOrder(autoCallOption);
+      const order = buildOrder(opt);
       if (!order) {
         showToast("Cannot build call order (qty=0?)", "error");
         return;
       }
       useWSStore.getState().sendOrder(order);
-      showToast(`BUY CALL: ${order.qty}x ${autoCallOption.symbol}`, "success");
+      showToast(`BUY CALL: ${order.qty}x ${opt.symbol}`, "success");
     });
 
     hotkeys("p", (e) => {
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      if (isInput(e)) return;
       e.preventDefault();
-      if (!autoPutOption) {
+      const opt = putRef.current;
+      if (!opt) {
         showToast("No put option selected", "error");
         return;
       }
-      const order = buildOrder(autoPutOption);
+      const order = buildOrder(opt);
       if (!order) {
         showToast("Cannot build put order (qty=0?)", "error");
         return;
       }
       useWSStore.getState().sendOrder(order);
-      showToast(`BUY PUT: ${order.qty}x ${autoPutOption.symbol}`, "success");
+      showToast(`BUY PUT: ${order.qty}x ${opt.symbol}`, "success");
     });
 
     hotkeys("s", (e) => {
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      if (isInput(e)) return;
       e.preventDefault();
       useWSStore.getState().closeAllPositions();
       showToast("Closing all positions", "info");
     });
 
+    hotkeys("x", (e) => {
+      if (isInput(e)) return;
+      e.preventDefault();
+      const sym = useMarketStore.getState().currentSymbol;
+      const positions = usePositionStore.getState().positions;
+      const pos = positions.find((p) => p.symbol.startsWith(sym));
+      if (!pos) {
+        showToast("No position to close for " + sym, "error");
+        return;
+      }
+      useWSStore.getState().closePosition(pos.symbol);
+      showToast(`Closing: ${pos.symbol}`, "info");
+    });
+
     hotkeys("tab", (e) => {
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      if (isInput(e)) return;
       e.preventDefault();
       symbolIndexRef.current = (symbolIndexRef.current + 1) % SYMBOLS.length;
-      setSymbol(SYMBOLS[symbolIndexRef.current]);
+      useMarketStore.getState().setSymbol(SYMBOLS[symbolIndexRef.current]);
       showToast(`Symbol: ${SYMBOLS[symbolIndexRef.current]}`, "info");
     });
 
     hotkeys("shift+tab", (e) => {
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      if (isInput(e)) return;
       e.preventDefault();
-      symbolIndexRef.current =
-        (symbolIndexRef.current - 1 + SYMBOLS.length) % SYMBOLS.length;
-      setSymbol(SYMBOLS[symbolIndexRef.current]);
+      symbolIndexRef.current = (symbolIndexRef.current - 1 + SYMBOLS.length) % SYMBOLS.length;
+      useMarketStore.getState().setSymbol(SYMBOLS[symbolIndexRef.current]);
       showToast(`Symbol: ${SYMBOLS[symbolIndexRef.current]}`, "info");
     });
 
     hotkeys("?", (e) => {
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      if (isInput(e)) return;
       e.preventDefault();
-      onShowHelp();
+      showHelpRef.current();
     });
 
-    // Number keys for quick qty
     for (let i = 1; i <= 9; i++) {
       hotkeys(String(i), (e) => {
-        if ((e.target as HTMLElement).tagName === "INPUT") return;
+        if (isInput(e)) return;
         e.preventDefault();
         qtyRef.current = i;
         showToast(`Qty: ${i}`, "info");
@@ -174,16 +184,5 @@ export function useKeyboardShortcuts(
       hotkeys.unbind("?");
       for (let i = 1; i <= 9; i++) hotkeys.unbind(String(i));
     };
-  }, [
-    cancelAllOrders,
-    positions,
-    currentSymbol,
-    setSymbol,
-    onShowHelp,
-    qtyRef,
-    autoCallOption,
-    autoPutOption,
-    buildOrder,
-    fetchPositions,
-  ]);
+  }, [qtyRef]);
 }

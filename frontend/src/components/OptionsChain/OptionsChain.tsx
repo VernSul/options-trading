@@ -11,9 +11,10 @@ import { autoSelectOption, type AutoSelectResult } from "../../utils/optionSelec
 interface Props {
   onSelectContract: (symbol: string, side: "buy" | "sell") => void;
   onAutoSelect?: (result: AutoSelectResult) => void;
+  onChainReady?: (chain: OptionChainType, spotPrice: number, expiration: string) => void;
 }
 
-export function OptionsChain({ onSelectContract, onAutoSelect }: Props) {
+export function OptionsChain({ onSelectContract, onAutoSelect, onChainReady }: Props) {
   const { currentSymbol, latestQuote, bars } = useMarketStore();
   const settings = useSettingsStore();
   const {
@@ -29,6 +30,12 @@ export function OptionsChain({ onSelectContract, onAutoSelect }: Props) {
   const [spotPrice, setSpotPrice] = useState<number | null>(null);
   const atmRowRef = useRef<HTMLTableRowElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const shouldScrollRef = useRef(true);
+
+  // Only scroll when symbol changes
+  useEffect(() => {
+    shouldScrollRef.current = true;
+  }, [currentSymbol]);
 
   // Resolve spot price: from latestQuote, last bar, or REST fallback
   useEffect(() => {
@@ -102,13 +109,15 @@ export function OptionsChain({ onSelectContract, onAutoSelect }: Props) {
   useEffect(() => {
     if (spotPrice && selectedExpiration && Object.keys(chain).length > 0) {
       handleAutoSelect(chain, spotPrice, selectedExpiration);
+      onChainReady?.(chain, spotPrice, selectedExpiration);
     }
-  }, [chain, spotPrice, selectedExpiration, handleAutoSelect]);
+  }, [chain, spotPrice, selectedExpiration, handleAutoSelect, onChainReady]);
 
-  // Auto-scroll to ATM row
+  // Auto-scroll to ATM row only on symbol change
   useEffect(() => {
-    if (atmRowRef.current) {
+    if (shouldScrollRef.current && atmRowRef.current) {
       atmRowRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+      shouldScrollRef.current = false;
     }
   }, [chain, spotPrice]);
 

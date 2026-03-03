@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -13,7 +14,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	chiCors "github.com/go-chi/cors"
 	"github.com/gorilla/websocket"
+	"github.com/shopspring/decimal"
 
+	"github.com/alpacahq/alpaca-trade-api-go/v3/alpaca"
 	"github.com/alpacahq/alpaca-trade-api-go/v3/marketdata"
 )
 
@@ -102,12 +105,151 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 					s.OptionStream.UnsubscribeFromQuotes(sym)
 				}
 			}
+
+		case hub.MsgPlaceOrder:
+			s.handleWSPlaceOrder(msg.Payload)
+
+		case hub.MsgCancelOrder:
+			s.handleWSCancelOrder(msg.Payload)
+
+		case hub.MsgCancelAllOrders:
+			s.handleWSCancelAllOrders()
+
+		case hub.MsgClosePosition:
+			s.handleWSClosePosition(msg.Payload)
+
+		case hub.MsgCloseAllPositions:
+			s.handleWSCloseAllPositions()
 		}
 	})
 
 	s.Hub.Register(client)
 	go client.WritePump()
 	go client.ReadPump()
+}
+
+func (s *Server) handleWSPlaceOrder(payload json.RawMessage) {
+	var req orders.SmartOrder
+	if err := json.Unmarshal(payload, &req); err != nil {
+		log.Printf("WS place_order decode error: %v", err)
+		s.Hub.BroadcastMessage(hub.MsgOrderError, map[string]string{
+			"error": "Invalid order payload: " + err.Error(),
+		})
+		return
+	}
+
+	order, err := s.OrderManager.PlaceSmartOrder(req)
+	if err != nil {
+		log.Printf("WS place_order failed: %v", err)
+		s.Hub.BroadcastMessage(hub.MsgOrderError, map[string]string{
+			"error":  err.Error(),
+			"symbol": req.Symbol,
+		})
+		return
+	}
+
+	s.Hub.BroadcastMessage(hub.MsgOrderPlaced, order)
+	s.broadcastPositionsAndAccount()
+}
+
+func (s *Server) handleWSCancelOrder(payload json.RawMessage) {
+	var req struct {
+		OrderID string `json:"orderId"`
+	}
+	if err := json.Unmarshal(payload, &req); err != nil {
+		log.Printf("WS cancel_order decode error: %v", err)
+		return
+	}
+
+	if err := s.Alpaca.Trading.CancelOrder(req.OrderID); err != nil {
+		log.Printf("WS cancel_order failed: %v", err)
+		s.Hub.BroadcastMessage(hub.MsgOrderError, map[string]string{
+			"error": "Cancel failed: " + err.Error(),
+		})
+		return
+	}
+
+	s.broadcastPositionsAndAccount()
+}
+
+func (s *Server) handleWSCancelAllOrders() {
+	if err := s.Alpaca.Trading.CancelAllOrders(); err != nil {
+		log.Printf("WS cancel_all_orders failed: %v", err)
+		s.Hub.BroadcastMessage(hub.MsgOrderError, map[string]string{
+			"error": "Cancel all failed: " + err.Error(),
+		})
+		return
+	}
+
+	s.broadcastPositionsAndAccount()
+}
+
+func (s *Server) handleWSClosePosition(payload json.RawMessage) {
+	var req struct {
+		Symbol string  `json:"symbol"`
+		Qty    *string `json:"qty,omitempty"`
+	}
+	if err := json.Unmarshal(payload, &req); err != nil {
+		log.Printf("WS close_position decode error: %v", err)
+		return
+	}
+
+	closeReq := alpaca.ClosePositionRequest{}
+	if req.Qty != nil {
+		q, _ := decimal.NewFromString(*req.Qty)
+		closeReq.Qty = q
+	}
+
+	order, err := s.Alpaca.Trading.ClosePosition(req.Symbol, closeReq)
+	if err != nil {
+		log.Printf("WS close_position failed: %v", err)
+		s.Hub.BroadcastMessage(hub.MsgOrderError, map[string]string{
+			"error":  "Close failed: " + err.Error(),
+			"symbol": req.Symbol,
+		})
+		return
+	}
+
+	s.Hub.BroadcastMessage(hub.MsgOrderPlaced, order)
+	s.broadcastPositionsAndAccount()
+}
+
+func (s *Server) handleWSCloseAllPositions() {
+	positions, err := s.Alpaca.Trading.GetPositions()
+	if err != nil {
+		log.Printf("WS close_all_positions get failed: %v", err)
+		s.Hub.BroadcastMessage(hub.MsgOrderError, map[string]string{
+			"error": "Get positions failed: " + err.Error(),
+		})
+		return
+	}
+
+	for _, pos := range positions {
+		_, err := s.Alpaca.Trading.ClosePosition(pos.Symbol, alpaca.ClosePositionRequest{})
+		if err != nil {
+			log.Printf("WS close position %s failed: %v", pos.Symbol, err)
+		}
+	}
+
+	s.broadcastPositionsAndAccount()
+}
+
+func (s *Server) broadcastPositionsAndAccount() {
+	go func() {
+		positions, err := s.Alpaca.Trading.GetPositions()
+		if err != nil {
+			log.Printf("Broadcast positions fetch error: %v", err)
+		} else {
+			s.Hub.BroadcastMessage(hub.MsgPositionsUpdate, positions)
+		}
+
+		account, err := s.Alpaca.Trading.GetAccount()
+		if err != nil {
+			log.Printf("Broadcast account fetch error: %v", err)
+		} else {
+			s.Hub.BroadcastMessage(hub.MsgAccountUpdate, account)
+		}
+	}()
 }
 
 func (s *Server) HandleGetBars(w http.ResponseWriter, r *http.Request) {

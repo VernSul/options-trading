@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { rest } from "../../api/rest";
-import { useOrderStore } from "../../stores/useOrderStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useWSStore } from "../../stores/useWSStore";
+import { showToast } from "../common/Toast";
 import type { SmartOrderRequest } from "../../types";
 
 interface Props {
@@ -17,24 +17,17 @@ export function OrderEntry({
   autoSelectedSymbol,
   autoAskPrice,
 }: Props) {
-  const settings = useSettingsStore();
-  const { fetchOrders } = useOrderStore();
+  const { dollarAmount, stopLossPercent, trailingStartPercent, trailingOffsetPercent } =
+    useSettingsStore();
+  const { sendOrder } = useWSStore();
 
   const [symbol, setSymbol] = useState(prefillSymbol || autoSelectedSymbol || "");
   const [side, setSide] = useState<string>(prefillSide || "buy");
   const [orderType, setOrderType] = useState("market");
   const [positionIntent, setPositionIntent] = useState("buy_to_open");
   const [limitPrice, setLimitPrice] = useState("");
-  const [dollarAmount, setDollarAmount] = useState(settings.dollarAmount);
   const [enableStopLoss, setEnableStopLoss] = useState(true);
-  const [stopLossPercent, setStopLossPercent] = useState(
-    settings.stopLossPercent * 100
-  );
   const [enableTrailing, setEnableTrailing] = useState(false);
-  const [trailingPercent, setTrailingPercent] = useState(
-    settings.trailingStopPercent * 100
-  );
-  const [safetyStop, setSafetyStop] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,20 +44,26 @@ export function OrderEntry({
   // Estimated entry price
   const entryPrice = autoAskPrice ?? (limitPrice ? parseFloat(limitPrice) : 0);
 
-  // Compute qty from dollar amount
+  // Compute qty from dollar amount (reads live from store)
   const computedQty =
     entryPrice > 0 ? Math.floor(dollarAmount / (entryPrice * 100)) : 0;
 
-  // Compute absolute stop price
+  // Compute absolute stop price (reads live from store)
   const computedStopPrice =
     entryPrice > 0 && enableStopLoss
-      ? entryPrice * (1 - stopLossPercent / 100)
+      ? entryPrice * (1 - stopLossPercent)
       : 0;
 
-  // Compute trail amount
+  // Compute trail amount from new settings
   const computedTrailAmount =
     entryPrice > 0 && enableTrailing
-      ? entryPrice * (trailingPercent / 100)
+      ? entryPrice * trailingOffsetPercent
+      : 0;
+
+  // Safety stop = entry * (1 - trailingStartPercent - some buffer)
+  const computedSafetyStop =
+    entryPrice > 0 && enableTrailing
+      ? entryPrice * (1 - trailingStartPercent - trailingOffsetPercent)
       : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -100,13 +99,13 @@ export function OrderEntry({
     if (enableTrailing && computedTrailAmount > 0) {
       order.trailingStop = {
         trailAmount: computedTrailAmount.toFixed(2),
-        safetyStop: safetyStop || (entryPrice * 0.8).toFixed(2),
+        safetyStop: computedSafetyStop > 0 ? computedSafetyStop.toFixed(2) : (entryPrice * 0.5).toFixed(2),
       };
     }
 
     try {
-      await rest.placeOrder(order);
-      fetchOrders();
+      sendOrder(order);
+      showToast(`Order sent: ${side} ${computedQty} ${symbol}`, "success");
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Order failed");
@@ -155,15 +154,7 @@ export function OrderEntry({
       <div className="form-row">
         <label className="dollar-input-label">
           $
-          <input
-            type="number"
-            value={dollarAmount}
-            onChange={(e) => setDollarAmount(parseInt(e.target.value) || 0)}
-            min={1}
-            step={100}
-            className="input"
-            style={{ width: 80 }}
-          />
+          <span style={{ fontWeight: 600, minWidth: 40 }}>{dollarAmount}</span>
         </label>
 
         <select
@@ -203,19 +194,7 @@ export function OrderEntry({
         </label>
         {enableStopLoss && (
           <>
-            <input
-              type="number"
-              value={stopLossPercent}
-              onChange={(e) =>
-                setStopLossPercent(parseFloat(e.target.value) || 0)
-              }
-              min={0}
-              max={100}
-              step={5}
-              className="input"
-              style={{ width: 60 }}
-            />
-            <span>%</span>
+            <span>{(stopLossPercent * 100).toFixed(0)}%</span>
             {computedStopPrice > 0 && (
               <span className="computed-value">
                 = ${computedStopPrice.toFixed(2)}
@@ -236,32 +215,15 @@ export function OrderEntry({
         </label>
         {enableTrailing && (
           <>
-            <input
-              type="number"
-              value={trailingPercent}
-              onChange={(e) =>
-                setTrailingPercent(parseFloat(e.target.value) || 0)
-              }
-              min={0}
-              max={100}
-              step={5}
-              className="input"
-              style={{ width: 60 }}
-            />
-            <span>%</span>
+            <span>
+              Start {(trailingStartPercent * 100).toFixed(0)}% / Offset{" "}
+              {(trailingOffsetPercent * 100).toFixed(0)}%
+            </span>
             {computedTrailAmount > 0 && (
               <span className="computed-value">
-                = ${computedTrailAmount.toFixed(2)}
+                = ${computedTrailAmount.toFixed(2)} trail
               </span>
             )}
-            <input
-              type="text"
-              value={safetyStop}
-              onChange={(e) => setSafetyStop(e.target.value)}
-              placeholder="Safety $"
-              className="input"
-              style={{ width: 70 }}
-            />
           </>
         )}
       </div>

@@ -49,14 +49,10 @@ export function useOptionsChain(): UseOptionsChainResult {
 
         const fmt = (d: Date) => d.toISOString().split("T")[0];
 
-        // Strike range based on chainStrikesRange setting
-        const strikePad = spotPrice * (chainStrikesRange / 100);
-
+        // Fetch a broad range — no strike_gte/strike_lte
         const params: Record<string, string> = {
           expiration_gte: fmt(gte),
           expiration_lte: fmt(lte),
-          strike_gte: (spotPrice - strikePad).toFixed(2),
-          strike_lte: (spotPrice + strikePad).toFixed(2),
         };
 
         const data = await rest.getOptionChain(symbol, params);
@@ -94,10 +90,41 @@ export function useOptionsChain(): UseOptionsChainResult {
         setSelectedExpiration(bestExp);
 
         // Filter chain to single expiration
-        const filtered: OptionChain = {};
+        const expFiltered: OptionChain = {};
         for (const [sym, snap] of Object.entries(data)) {
           const parsed = parseOCC(sym);
           if (parsed && parsed.expiration === bestExp) {
+            expFiltered[sym] = snap;
+          }
+        }
+
+        // Count-based strike filtering: find ATM, keep ±chainStrikesRange strikes
+        const strikes = new Set<number>();
+        for (const sym of Object.keys(expFiltered)) {
+          const parsed = parseOCC(sym);
+          if (parsed) strikes.add(parsed.strike);
+        }
+        const sortedStrikes = Array.from(strikes).sort((a, b) => a - b);
+
+        // Find ATM index
+        let atmIdx = 0;
+        let minDiff2 = Infinity;
+        for (let i = 0; i < sortedStrikes.length; i++) {
+          const diff = Math.abs(sortedStrikes[i] - spotPrice);
+          if (diff < minDiff2) {
+            minDiff2 = diff;
+            atmIdx = i;
+          }
+        }
+
+        const low = Math.max(0, atmIdx - chainStrikesRange);
+        const high = Math.min(sortedStrikes.length - 1, atmIdx + chainStrikesRange);
+        const allowedStrikes = new Set(sortedStrikes.slice(low, high + 1));
+
+        const filtered: OptionChain = {};
+        for (const [sym, snap] of Object.entries(expFiltered)) {
+          const parsed = parseOCC(sym);
+          if (parsed && allowedStrikes.has(parsed.strike)) {
             filtered[sym] = snap;
           }
         }

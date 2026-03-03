@@ -4,6 +4,9 @@ interface Props {
 }
 
 const SHORTCUTS = [
+  { key: "B", desc: "Buy call (instant order)" },
+  { key: "P", desc: "Buy put (instant order)" },
+  { key: "S", desc: "Sell all positions" },
   { key: "/", desc: "Focus symbol search" },
   { key: "Tab", desc: "Next symbol" },
   { key: "Shift+Tab", desc: "Previous symbol" },

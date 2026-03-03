@@ -12,7 +12,8 @@ interface SettingsState {
   defaultDirection: Direction;
   dollarAmount: number;
   stopLossPercent: number;
-  trailingStopPercent: number;
+  trailingStartPercent: number;
+  trailingOffsetPercent: number;
   defaultTimeframe: Timeframe;
   chainStrikesRange: number;
 
@@ -22,7 +23,8 @@ interface SettingsState {
   setDefaultDirection: (v: Direction) => void;
   setDollarAmount: (v: number) => void;
   setStopLossPercent: (v: number) => void;
-  setTrailingStopPercent: (v: number) => void;
+  setTrailingStartPercent: (v: number) => void;
+  setTrailingOffsetPercent: (v: number) => void;
   setDefaultTimeframe: (v: Timeframe) => void;
   setChainStrikesRange: (v: number) => void;
 }
@@ -36,7 +38,8 @@ export const useSettingsStore = create<SettingsState>()(
       defaultDirection: "call",
       dollarAmount: 500,
       stopLossPercent: 0.5,
-      trailingStopPercent: 0.25,
+      trailingStartPercent: 0.10,
+      trailingOffsetPercent: 0.05,
       defaultTimeframe: "5Min",
       chainStrikesRange: 10,
 
@@ -46,7 +49,8 @@ export const useSettingsStore = create<SettingsState>()(
       setDefaultDirection: (v) => set({ defaultDirection: v }),
       setDollarAmount: (v) => set({ dollarAmount: v }),
       setStopLossPercent: (v) => set({ stopLossPercent: v }),
-      setTrailingStopPercent: (v) => set({ trailingStopPercent: v }),
+      setTrailingStartPercent: (v) => set({ trailingStartPercent: v }),
+      setTrailingOffsetPercent: (v) => set({ trailingOffsetPercent: v }),
       setDefaultTimeframe: (v) => set({ defaultTimeframe: v }),
       setChainStrikesRange: (v) => set({ chainStrikesRange: v }),
     }),

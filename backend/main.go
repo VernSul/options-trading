@@ -115,11 +115,23 @@ func main() {
 		trailingEngine.UpdatePrice(q.Symbol, mid)
 	}
 
-	// Wire trading stream -> hub + order manager fill detection
+	// Wire trading stream -> hub + order manager fill detection + broadcast positions/account
 	tradingStream.OnUpdate = func(tu alpacaAPI.TradeUpdate) {
 		wsHub.BroadcastMessage(hub.MsgTradeUpdate, tu)
 		if tu.Event == "fill" && tu.Price != nil {
 			orderMgr.HandleFill(tu.Order.ID, *tu.Price)
+		}
+		if tu.Event == "fill" || tu.Event == "canceled" || tu.Event == "partial_fill" {
+			go func() {
+				positions, err := client.Trading.GetPositions()
+				if err == nil {
+					wsHub.BroadcastMessage(hub.MsgPositionsUpdate, positions)
+				}
+				account, err := client.Trading.GetAccount()
+				if err == nil {
+					wsHub.BroadcastMessage(hub.MsgAccountUpdate, account)
+				}
+			}()
 		}
 	}
 

@@ -16,8 +16,14 @@ export function StatusBar() {
           </>
         )}
       </span>
-      <span className="status-item">
-        Press <kbd>?</kbd> for shortcuts
+      <span className="status-item shortcuts-legend">
+        <kbd>B</kbd> Buy Call
+        {" | "}
+        <kbd>P</kbd> Buy Put
+        {" | "}
+        <kbd>S</kbd> Sell All
+        {" | "}
+        <kbd>?</kbd> Help
       </span>
     </div>
   );

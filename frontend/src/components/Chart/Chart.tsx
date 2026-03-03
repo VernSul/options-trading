@@ -5,8 +5,10 @@ import {
   type IChartApi,
   type ISeriesApi,
   type CandlestickData,
+  type IPriceLine,
   type Time,
   ColorType,
+  LineStyle,
 } from "lightweight-charts";
 import { useMarketStore } from "../../stores/useMarketStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
@@ -33,10 +35,25 @@ function barToCandle(bar: Bar): CandlestickData<Time> {
   };
 }
 
-export function Chart() {
+interface PnLProjection {
+  price: number;
+  pl: number;
+  plPercent: number;
+}
+
+interface ChartProps {
+  pnlProjections?: PnLProjection[];
+  stopLossUnderlying?: number;
+  trailStartUnderlying?: number;
+}
+
+export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const shouldFitRef = useRef(true);
+  const pnlLinesRef = useRef<IPriceLine[]>([]);
+  const riskLinesRef = useRef<IPriceLine[]>([]);
 
   const { currentSymbol, bars, setBars } = useMarketStore();
   const { defaultTimeframe } = useSettingsStore();
@@ -95,6 +112,7 @@ export function Chart() {
   // Load bars on symbol or timeframe change
   useEffect(() => {
     if (!currentSymbol) return;
+    shouldFitRef.current = true;
     rest.getBars(currentSymbol, timeframe).then((data) => {
       if (data) setBars(normalizeBars(data));
     });
@@ -105,17 +123,75 @@ export function Chart() {
     if (!seriesRef.current || bars.length === 0) return;
     const candles = bars.map(barToCandle);
     seriesRef.current.setData(candles);
-    chartRef.current?.timeScale().fitContent();
-  }, [bars]);
-
-  // Real-time bar updates
-  useEffect(() => {
-    if (!seriesRef.current || bars.length === 0) return;
-    const last = bars[bars.length - 1];
-    if (last) {
-      seriesRef.current.update(barToCandle(last));
+    if (shouldFitRef.current) {
+      chartRef.current?.timeScale().fitContent();
+      shouldFitRef.current = false;
     }
   }, [bars]);
+
+  // P&L projection lines
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    // Clear old lines
+    for (const line of pnlLinesRef.current) {
+      series.removePriceLine(line);
+    }
+    pnlLinesRef.current = [];
+
+    if (!pnlProjections || pnlProjections.length === 0) return;
+
+    for (const proj of pnlProjections) {
+      const isPositive = proj.pl >= 0;
+      const sign = isPositive ? "+" : "";
+      const line = series.createPriceLine({
+        price: proj.price,
+        color: isPositive ? "#22c55e" : "#ef4444",
+        lineWidth: 1,
+        lineStyle: LineStyle.Dotted,
+        axisLabelVisible: true,
+        title: `${sign}$${proj.pl.toFixed(0)} (${sign}${proj.plPercent.toFixed(1)}%)`,
+      });
+      pnlLinesRef.current.push(line);
+    }
+  }, [pnlProjections]);
+
+  // Stop-loss & trailing start lines
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    // Clear old lines
+    for (const line of riskLinesRef.current) {
+      series.removePriceLine(line);
+    }
+    riskLinesRef.current = [];
+
+    if (stopLossUnderlying && stopLossUnderlying > 0) {
+      const slLine = series.createPriceLine({
+        price: stopLossUnderlying,
+        color: "#ef4444",
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: "SL",
+      });
+      riskLinesRef.current.push(slLine);
+    }
+
+    if (trailStartUnderlying && trailStartUnderlying > 0) {
+      const trailLine = series.createPriceLine({
+        price: trailStartUnderlying,
+        color: "#eab308",
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: "Trail Start",
+      });
+      riskLinesRef.current.push(trailLine);
+    }
+  }, [stopLossUnderlying, trailStartUnderlying]);
 
   return (
     <div className="chart-container">

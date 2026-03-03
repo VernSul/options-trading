@@ -109,19 +109,36 @@ export function SettingsPanel() {
           </label>
 
           <label className="setting-item">
-            <span>Trail %</span>
+            <span>Trail Start %</span>
             <input
               type="number"
               className="input"
-              value={(settings.trailingStopPercent * 100).toFixed(0)}
+              value={(settings.trailingStartPercent * 100).toFixed(0)}
               onChange={(e) =>
-                settings.setTrailingStopPercent(
+                settings.setTrailingStartPercent(
                   (parseFloat(e.target.value) || 0) / 100
                 )
               }
               min={0}
               max={100}
-              step={5}
+              step={1}
+            />
+          </label>
+
+          <label className="setting-item">
+            <span>Trail Offset %</span>
+            <input
+              type="number"
+              className="input"
+              value={(settings.trailingOffsetPercent * 100).toFixed(0)}
+              onChange={(e) =>
+                settings.setTrailingOffsetPercent(
+                  (parseFloat(e.target.value) || 0) / 100
+                )
+              }
+              min={0}
+              max={100}
+              step={1}
             />
           </label>
 

@@ -7,8 +7,6 @@ export function AccountPanel() {
 
   useEffect(() => {
     fetchAccount();
-    const interval = setInterval(fetchAccount, 30000);
-    return () => clearInterval(interval);
   }, [fetchAccount]);
 
   if (loading && !account) return <div className="panel">Loading account...</div>;

@@ -2,8 +2,11 @@ import { useEffect, useRef, useCallback } from "react";
 import { useMarketStore } from "../stores/useMarketStore";
 import { useOrderStore } from "../stores/useOrderStore";
 import { usePositionStore } from "../stores/usePositionStore";
+import { useAccountStore } from "../stores/useAccountStore";
 import { useCrossingStore } from "../stores/useCrossingStore";
-import type { WSMessage, TradeUpdate } from "../types";
+import { useWSStore } from "../stores/useWSStore";
+import { showToast } from "../components/common/Toast";
+import type { WSMessage, TradeUpdate, Position, Account, Order, SmartOrderRequest } from "../types";
 import { normalizeBar, normalizeStockQuote, normalizeOptionQuote } from "../utils/normalize";
 
 const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8080/ws";
@@ -14,9 +17,11 @@ export function useWebSocket() {
 
   const { addBar, setLatestQuote, setOptionQuote, currentSymbol } =
     useMarketStore();
-  const { updateOrder, fetchOrders } = useOrderStore();
-  const { fetchPositions } = usePositionStore();
+  const { updateOrder, fetchOrders, addOrder } = useOrderStore();
+  const { setPositions, fetchPositions } = usePositionStore();
+  const { fetchAccount } = useAccountStore();
   const { markTriggered } = useCrossingStore();
+  const { setActions } = useWSStore();
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -43,6 +48,44 @@ export function useWebSocket() {
           })
         );
       }
+
+      // Populate WS action store
+      setActions({
+        sendOrder: (order: SmartOrderRequest) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: "place_order",
+              payload: order,
+            }));
+          }
+        },
+        cancelOrder: (id: string) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: "cancel_order",
+              payload: { orderId: id },
+            }));
+          }
+        },
+        cancelAllOrders: () => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "cancel_all_orders" }));
+          }
+        },
+        closePosition: (symbol: string, qty?: string) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: "close_position",
+              payload: { symbol, qty },
+            }));
+          }
+        },
+        closeAllPositions: () => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "close_all_positions" }));
+          }
+        },
+      });
     };
 
     ws.onmessage = (event) => {
@@ -63,8 +106,27 @@ export function useWebSocket() {
             updateOrder(tu.order);
             if (tu.event === "fill" || tu.event === "canceled") {
               fetchOrders();
-              fetchPositions();
             }
+            break;
+          }
+          case "order_placed": {
+            const order = msg.payload as Order;
+            addOrder(order);
+            break;
+          }
+          case "order_error": {
+            const errData = msg.payload as { error: string; symbol?: string };
+            showToast(`Order error: ${errData.error}`, "error");
+            break;
+          }
+          case "positions_update": {
+            const positions = msg.payload as Position[];
+            setPositions(positions);
+            break;
+          }
+          case "account_update": {
+            const account = msg.payload as Account;
+            useAccountStore.setState({ account });
             break;
           }
           case "crossing_triggered": {
@@ -97,9 +159,13 @@ export function useWebSocket() {
     setOptionQuote,
     updateOrder,
     fetchOrders,
+    addOrder,
+    setPositions,
     fetchPositions,
+    fetchAccount,
     markTriggered,
     currentSymbol,
+    setActions,
   ]);
 
   useEffect(() => {

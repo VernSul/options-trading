@@ -8,8 +8,6 @@ export function PositionsPanel() {
 
   useEffect(() => {
     fetchPositions();
-    const interval = setInterval(fetchPositions, 10000);
-    return () => clearInterval(interval);
   }, [fetchPositions]);
 
   const handleClose = async (symbol: string) => {

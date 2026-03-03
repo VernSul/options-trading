@@ -1,28 +1,37 @@
 import { useEffect } from "react";
 import { usePositionStore } from "../../stores/usePositionStore";
-import { rest } from "../../api/rest";
+import { useWSStore } from "../../stores/useWSStore";
 import { formatPrice, formatPL, formatPercent, formatQty } from "../../utils/format";
+import { showToast } from "../common/Toast";
 
 export function PositionsPanel() {
   const { positions, loading, fetchPositions } = usePositionStore();
+  const { closePosition, closeAllPositions } = useWSStore();
 
   useEffect(() => {
     fetchPositions();
   }, [fetchPositions]);
 
-  const handleClose = async (symbol: string) => {
-    if (!confirm(`Close entire position in ${symbol}?`)) return;
-    try {
-      await rest.closePosition(symbol);
-      fetchPositions();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to close position");
-    }
+  const handleClose = (symbol: string) => {
+    closePosition(symbol);
+    showToast(`Closing ${symbol}`, "info");
+  };
+
+  const handleCloseAll = () => {
+    closeAllPositions();
+    showToast("Closing all positions", "info");
   };
 
   return (
     <div className="panel positions-panel">
-      <h3>Positions {loading && <span className="loading">...</span>}</h3>
+      <div className="panel-header">
+        <h3>Positions {loading && <span className="loading">...</span>}</h3>
+        {positions.length > 0 && (
+          <button className="btn btn-small btn-danger" onClick={handleCloseAll}>
+            Close All
+          </button>
+        )}
+      </div>
       {positions.length === 0 ? (
         <div className="empty">No open positions</div>
       ) : (

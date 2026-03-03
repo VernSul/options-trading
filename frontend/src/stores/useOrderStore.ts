@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Order } from "../types";
 import { rest } from "../api/rest";
+import { useWSStore } from "./useWSStore";
 
 interface OrderState {
   orders: Order[];
@@ -8,11 +9,11 @@ interface OrderState {
   fetchOrders: () => Promise<void>;
   addOrder: (order: Order) => void;
   updateOrder: (order: Order) => void;
-  cancelOrder: (id: string) => Promise<void>;
-  cancelAllOrders: () => Promise<void>;
+  cancelOrder: (id: string) => void;
+  cancelAllOrders: () => void;
 }
 
-export const useOrderStore = create<OrderState>((set, get) => ({
+export const useOrderStore = create<OrderState>((set) => ({
   orders: [],
   loading: false,
 
@@ -34,13 +35,11 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       orders: state.orders.map((o) => (o.id === order.id ? order : o)),
     })),
 
-  cancelOrder: async (id) => {
-    await rest.cancelOrder(id);
-    get().fetchOrders();
+  cancelOrder: (id) => {
+    useWSStore.getState().cancelOrder(id);
   },
 
-  cancelAllOrders: async () => {
-    await rest.cancelAllOrders();
-    set({ orders: [] });
+  cancelAllOrders: () => {
+    useWSStore.getState().cancelAllOrders();
   },
 }));

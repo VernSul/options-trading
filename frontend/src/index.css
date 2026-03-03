@@ -479,8 +479,17 @@ body {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 3px;
-  padding: 0 4px;
+  padding: 1px 5px;
   font-size: 10px;
+  font-family: inherit;
+}
+
+.shortcuts-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 /* Toast */

@@ -55,7 +55,7 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
   const pnlLinesRef = useRef<IPriceLine[]>([]);
   const riskLinesRef = useRef<IPriceLine[]>([]);
 
-  const { currentSymbol, bars, setBars } = useMarketStore();
+  const { currentSymbol, bars, setBars, latestQuote } = useMarketStore();
   const { defaultTimeframe } = useSettingsStore();
   const [timeframe, setTimeframe] = useState<Timeframe>(defaultTimeframe);
 
@@ -197,11 +197,13 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     <div className="chart-container">
       <div className="chart-header">
         <span className="chart-symbol">{currentSymbol}</span>
-        {bars.length > 0 && (
-          <span className="chart-price">
-            {bars[bars.length - 1].close.toFixed(2)}
-          </span>
-        )}
+        <span className="chart-price">
+          {latestQuote
+            ? ((latestQuote.bidPrice + latestQuote.askPrice) / 2).toFixed(2)
+            : bars.length > 0
+              ? bars[bars.length - 1].close.toFixed(2)
+              : "—"}
+        </span>
         <div className="timeframe-buttons">
           {TIMEFRAMES.map((tf) => (
             <button

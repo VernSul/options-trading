@@ -53,6 +53,14 @@ func main() {
 		}
 	}()
 
+	// Init streams (before wiring callbacks that reference them)
+	ctx := context.Background()
+
+	stockStream := alpacaClient.NewStockStream(cfg.AlpacaAPIKey, cfg.AlpacaAPISecret)
+	optionStream := alpacaClient.NewOptionStream(cfg.AlpacaAPIKey, cfg.AlpacaAPISecret)
+	tradingStream := alpacaClient.NewTradingStream(client.Trading)
+	finnhubStream := finnhub.NewStream(cfg.FinnhubAPIKey)
+
 	// Init order manager
 	orderMgr := orders.NewOrderManager(client.Trading)
 	trailingEngine := orders.NewTrailingStopEngine(client.Trading)
@@ -69,6 +77,10 @@ func main() {
 	}
 
 	orderMgr.OnTrailingInit = func(ts *orders.TrailingStop) {
+		// Auto-subscribe to option quotes so the trailing engine receives price updates
+		if err := optionStream.SubscribeToQuotes(ts.Symbol); err != nil {
+			log.Printf("Warning: failed to subscribe to option quotes for trailing %s: %v", ts.Symbol, err)
+		}
 		trailingEngine.Register(ts)
 		wsHub.BroadcastMessage(hub.MsgTrailingStopUpdate, ts)
 	}
@@ -88,13 +100,6 @@ func main() {
 		})
 	}
 
-	// Init streams
-	ctx := context.Background()
-
-	stockStream := alpacaClient.NewStockStream(cfg.AlpacaAPIKey, cfg.AlpacaAPISecret)
-	optionStream := alpacaClient.NewOptionStream(cfg.AlpacaAPIKey, cfg.AlpacaAPISecret)
-	tradingStream := alpacaClient.NewTradingStream(client.Trading)
-
 	// Wire stock stream -> hub (bars + quotes as fallback for symbols Finnhub doesn't cover)
 	stockStream.OnBar = func(b stream.Bar) {
 		wsHub.BroadcastMessage(hub.MsgBar, b)
@@ -106,7 +111,6 @@ func main() {
 	}
 
 	// Finnhub trade stream -> hub + crossing engine (replaces Alpaca IEX quotes)
-	finnhubStream := finnhub.NewStream(cfg.FinnhubAPIKey)
 	finnhubStream.OnTrade = func(symbol string, price float64, volume int64, timestamp int64) {
 		wsHub.BroadcastMessage(hub.MsgStockQuote, map[string]interface{}{
 			"Symbol":   symbol,

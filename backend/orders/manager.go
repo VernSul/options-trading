@@ -82,25 +82,33 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 
 func (om *OrderManager) HandleFill(orderID string, filledPrice decimal.Decimal) {
 	om.mu.Lock()
-	defer om.mu.Unlock()
 
 	// Check for pending stop-loss
+	var pendingStop *PendingStopLoss
 	if ps, ok := om.pendingStops[orderID]; ok {
+		pendingStop = ps
 		delete(om.pendingStops, orderID)
-		go om.placeStopOrder(ps)
 	}
 
 	// Check for pending trailing stop
+	var trailingStop *TrailingStop
 	if ts, ok := om.trailingStops[orderID]; ok {
 		ts.EntryPrice = filledPrice
 		// Stay inactive — engine will activate when price reaches start threshold
 		ts.Active = false
+		trailingStop = ts
+	}
 
-		// Place wide safety-net stop on Alpaca
-		go om.placeSafetyNetStop(ts)
+	om.mu.Unlock()
 
+	// Fire callbacks outside the lock (they may do network calls)
+	if pendingStop != nil {
+		go om.placeStopOrder(pendingStop)
+	}
+	if trailingStop != nil {
+		go om.placeSafetyNetStop(trailingStop)
 		if om.OnTrailingInit != nil {
-			om.OnTrailingInit(ts)
+			om.OnTrailingInit(trailingStop)
 		}
 	}
 }

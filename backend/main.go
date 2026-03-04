@@ -173,13 +173,18 @@ func main() {
 		}
 	}
 
-	// Connect streams
-	if err := stockStream.Connect(ctx); err != nil {
-		log.Printf("Warning: stock stream connect failed: %v", err)
-	}
-	if err := optionStream.Connect(ctx); err != nil {
-		log.Printf("Warning: option stream connect failed: %v", err)
-	}
+	// Connect streams (Alpaca streams in background — they block on auth retries
+	// during deploys when the old instance still holds connections)
+	go func() {
+		if err := stockStream.Connect(ctx); err != nil {
+			log.Printf("Warning: stock stream connect failed: %v", err)
+		}
+	}()
+	go func() {
+		if err := optionStream.Connect(ctx); err != nil {
+			log.Printf("Warning: option stream connect failed: %v", err)
+		}
+	}()
 	tradingStream.Start(ctx)
 	if cfg.FinnhubAPIKey != "" {
 		if err := finnhubStream.Connect(ctx); err != nil {

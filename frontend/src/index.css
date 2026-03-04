@@ -192,7 +192,6 @@ body {
   width: 100%;
   border-collapse: collapse;
   font-size: 11px;
-  table-layout: fixed;
 }
 
 .panel-table th {
@@ -206,8 +205,6 @@ body {
 .panel-table td {
   padding: 4px 6px;
   border-bottom: 1px solid rgba(42, 42, 74, 0.5);
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -215,16 +212,10 @@ body {
   background: rgba(99, 102, 241, 0.05);
 }
 
-/* Positions table columns */
-.positions-panel .panel-table th:first-child,
-.positions-panel .panel-table td:first-child {
-  width: 30%;
-}
-
-/* Orders table columns */
-.orders-panel .panel-table th:first-child,
-.orders-panel .panel-table td:first-child {
-  width: 30%;
+/* Scrollable table panels */
+.positions-panel,
+.orders-panel {
+  overflow-x: auto;
 }
 
 /* Account Panel */

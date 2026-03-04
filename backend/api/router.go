@@ -91,7 +91,8 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				case "bars":
 					s.StockStream.SubscribeToBars(sym)
 				case "quotes":
-					// Route stock quotes to Finnhub (Alpaca IEX disabled)
+					// Subscribe to both Alpaca IEX and Finnhub for coverage
+					s.StockStream.SubscribeToQuotes(sym)
 					if s.FinnhubStream != nil {
 						s.FinnhubStream.Subscribe(sym)
 					}
@@ -105,7 +106,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				case "bars":
 					s.StockStream.UnsubscribeFromBars(sym)
 				case "quotes":
-					// Route stock quotes to Finnhub (Alpaca IEX disabled)
+					s.StockStream.UnsubscribeFromQuotes(sym)
 					if s.FinnhubStream != nil {
 						s.FinnhubStream.Unsubscribe(sym)
 					}

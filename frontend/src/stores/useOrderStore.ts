@@ -31,9 +31,14 @@ export const useOrderStore = create<OrderState>((set) => ({
     set((state) => ({ orders: [order, ...state.orders] })),
 
   updateOrder: (order) =>
-    set((state) => ({
-      orders: state.orders.map((o) => (o.id === order.id ? order : o)),
-    })),
+    set((state) => {
+      const terminal = ["filled", "canceled", "expired", "rejected"];
+      if (terminal.includes(order.status)) {
+        // Remove terminal orders from the list
+        return { orders: state.orders.filter((o) => o.id !== order.id) };
+      }
+      return { orders: state.orders.map((o) => (o.id === order.id ? order : o)) };
+    }),
 
   cancelOrder: (id) => {
     useWSStore.getState().cancelOrder(id);

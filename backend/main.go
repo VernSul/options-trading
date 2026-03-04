@@ -99,16 +99,15 @@ func main() {
 	optionStream := alpacaClient.NewOptionStream(cfg.AlpacaAPIKey, cfg.AlpacaAPISecret)
 	tradingStream := alpacaClient.NewTradingStream(client.Trading)
 
-	// Wire stock stream -> hub (bars only, quotes replaced by Finnhub)
+	// Wire stock stream -> hub (bars + quotes as fallback for symbols Finnhub doesn't cover)
 	stockStream.OnBar = func(b stream.Bar) {
 		wsHub.BroadcastMessage(hub.MsgBar, b)
 	}
-	// Alpaca IEX quote stream disabled — unreliable, replaced by Finnhub trades
-	// stockStream.OnQuote = func(q stream.Quote) {
-	// 	wsHub.BroadcastMessage(hub.MsgStockQuote, q)
-	// 	mid := decimal.NewFromFloat((q.BidPrice + q.AskPrice) / 2)
-	// 	crossingEngine.CheckPrice(q.Symbol, mid)
-	// }
+	stockStream.OnQuote = func(q stream.Quote) {
+		wsHub.BroadcastMessage(hub.MsgStockQuote, q)
+		mid := decimal.NewFromFloat((q.BidPrice + q.AskPrice) / 2)
+		crossingEngine.CheckPrice(q.Symbol, mid)
+	}
 
 	// Finnhub trade stream -> hub + crossing engine (replaces Alpaca IEX quotes)
 	finnhubStream := finnhub.NewStream(cfg.FinnhubAPIKey)

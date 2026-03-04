@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import {
   createChart,
   CandlestickSeries,
@@ -51,17 +51,15 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const shouldFitRef = useRef(true);
   const pnlLinesRef = useRef<IPriceLine[]>([]);
   const riskLinesRef = useRef<IPriceLine[]>([]);
   const liveCandleRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
-  const prevBarsLenRef = useRef(0);
-  // Track which symbol the loaded bars belong to, to discard stale REST responses
-  const loadedSymbolRef = useRef("");
-  // Monotonic fetch counter to discard stale REST responses
-  const fetchIdRef = useRef(0);
 
-  const { currentSymbol, bars, setBars, latestQuote } = useMarketStore();
+  // Track what's currently loaded on the chart to detect full-load vs live-update
+  const loadedKeyRef = useRef("");    // "SYMBOL:TIMEFRAME" of loaded data
+  const loadedCountRef = useRef(0);   // number of bars loaded on chart
+
+  const { currentSymbol, bars, latestQuote } = useMarketStore();
   const { defaultTimeframe, setDefaultTimeframe } = useSettingsStore();
   const timeframe = defaultTimeframe;
   const setTimeframe = setDefaultTimeframe;
@@ -121,47 +119,97 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     return () => {
       ro.disconnect();
       chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
     };
   }, []);
 
-  // Load bars on symbol or timeframe change
+  // Fetch bars and load chart on symbol/timeframe change.
+  // Uses an abort controller so rapid switching cancels stale fetches.
   useEffect(() => {
     if (!currentSymbol) return;
 
-    // Reset chart state for new symbol
-    shouldFitRef.current = true;
-    liveCandleRef.current = null;
-    prevBarsLenRef.current = 0;
-    loadedSymbolRef.current = "";
+    const series = seriesRef.current;
+    const chart = chartRef.current;
 
-    // Clear chart immediately so stale candles don't linger
-    if (seriesRef.current) {
-      seriesRef.current.setData([]);
+    // Clear chart immediately
+    liveCandleRef.current = null;
+    loadedKeyRef.current = "";
+    loadedCountRef.current = 0;
+    if (series) series.setData([]);
+
+    const abortCtrl = new AbortController();
+
+    rest
+      .getBars(currentSymbol, timeframe)
+      .then((data) => {
+        if (abortCtrl.signal.aborted) return;
+        if (!data || !Array.isArray(data) || data.length === 0) return;
+
+        const normalized = normalizeBars(data);
+        const candles = normalized.map(barToCandle);
+
+        if (series) {
+          series.setData(candles);
+          chart?.timeScale().fitContent();
+        }
+
+        // Store bars in Zustand (for header price display and live candle logic)
+        useMarketStore.getState().setBars(normalized);
+        loadedKeyRef.current = `${currentSymbol}:${timeframe}`;
+        loadedCountRef.current = normalized.length;
+      })
+      .catch((err) => {
+        if (abortCtrl.signal.aborted) return;
+        console.error(`Failed to load bars for ${currentSymbol}:`, err);
+      });
+
+    return () => {
+      abortCtrl.abort();
+    };
+  }, [currentSymbol, timeframe]);
+
+  // Sync chart when bars change from live updates (addBar from WS or quote engine).
+  // Only runs for incremental updates — full loads are handled above.
+  const syncBars = useCallback(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    const currentBars = useMarketStore.getState().bars;
+    const currentKey = `${currentSymbol}:${timeframe}`;
+
+    // Skip if this isn't the currently loaded dataset
+    if (loadedKeyRef.current !== currentKey) return;
+    // Skip if bars count hasn't changed (no new bar added)
+    if (currentBars.length <= loadedCountRef.current) {
+      // Same count — might be an in-place update of the last bar
+      if (currentBars.length > 0 && currentBars.length === loadedCountRef.current) {
+        const lastBar = currentBars[currentBars.length - 1];
+        series.update(barToCandle(lastBar));
+      }
+      return;
     }
 
-    const myFetchId = ++fetchIdRef.current;
+    // New bar added — update chart and count
+    const lastBar = currentBars[currentBars.length - 1];
+    series.update(barToCandle(lastBar));
+    loadedCountRef.current = currentBars.length;
+  }, [currentSymbol, timeframe]);
 
-    rest.getBars(currentSymbol, timeframe).then((data) => {
-      // Discard if a newer fetch was started (symbol changed again)
-      if (myFetchId !== fetchIdRef.current) return;
-      if (data) {
-        loadedSymbolRef.current = currentSymbol;
-        setBars(normalizeBars(data));
-      }
-    });
-  }, [currentSymbol, timeframe, setBars]);
+  // Subscribe to bar changes in the store
+  useEffect(() => {
+    return useMarketStore.subscribe(syncBars);
+  }, [syncBars]);
 
   // Live price update from quotes — build candles from mid-price
   useEffect(() => {
     if (!seriesRef.current || !latestQuote) return;
 
-    // Read current bars directly from the store to avoid stale closure
-    const storeBars = useMarketStore.getState().bars;
-    if (storeBars.length === 0) return;
-
-    // Only process quotes for the currently loaded symbol
     const storeSymbol = useMarketStore.getState().currentSymbol;
     if (latestQuote.symbol !== storeSymbol) return;
+
+    const storeBars = useMarketStore.getState().bars;
+    if (storeBars.length === 0) return;
 
     const mid = (latestQuote.bidPrice + latestQuote.askPrice) / 2;
     if (mid <= 0) return;
@@ -231,35 +279,6 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestQuote]);
-
-  // Update chart data when bars change
-  useEffect(() => {
-    if (!seriesRef.current) return;
-
-    // Bars cleared (symbol change) — clear chart
-    if (bars.length === 0) {
-      prevBarsLenRef.current = 0;
-      return;
-    }
-
-    const prevLen = prevBarsLenRef.current;
-    prevBarsLenRef.current = bars.length;
-
-    // Full load (symbol/timeframe change) — always setData when shouldFit or when
-    // prevLen was 0 (transition from empty bars to populated bars)
-    if (shouldFitRef.current || prevLen === 0) {
-      const candles = bars.map(barToCandle);
-      seriesRef.current.setData(candles);
-      if (shouldFitRef.current) {
-        chartRef.current?.timeScale().fitContent();
-        shouldFitRef.current = false;
-      }
-    } else {
-      // Live update — just update the last candle
-      const lastBar = bars[bars.length - 1];
-      seriesRef.current.update(barToCandle(lastBar));
-    }
-  }, [bars]);
 
   // P&L projection lines
   useEffect(() => {

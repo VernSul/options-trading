@@ -18,6 +18,8 @@ interface SettingsState {
   chainStrikesRange: number;
   showProjections: boolean;
   currentSymbol: string;
+  enableStopLoss: boolean;
+  enableTrailing: boolean;
 
   setDefaultExpDays: (v: number) => void;
   setStrikeOffset: (v: number) => void;
@@ -31,6 +33,8 @@ interface SettingsState {
   setChainStrikesRange: (v: number) => void;
   setShowProjections: (v: boolean) => void;
   setCurrentSymbol: (v: string) => void;
+  setEnableStopLoss: (v: boolean) => void;
+  setEnableTrailing: (v: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -48,6 +52,8 @@ export const useSettingsStore = create<SettingsState>()(
       chainStrikesRange: 10,
       showProjections: true,
       currentSymbol: "SPY",
+      enableStopLoss: true,
+      enableTrailing: false,
 
       setDefaultExpDays: (v) => set({ defaultExpDays: v }),
       setStrikeOffset: (v) => set({ strikeOffset: v }),
@@ -61,6 +67,8 @@ export const useSettingsStore = create<SettingsState>()(
       setChainStrikesRange: (v) => set({ chainStrikesRange: v }),
       setShowProjections: (v) => set({ showProjections: v }),
       setCurrentSymbol: (v) => set({ currentSymbol: v }),
+      setEnableStopLoss: (v) => set({ enableStopLoss: v }),
+      setEnableTrailing: (v) => set({ enableTrailing: v }),
     }),
     { name: "trading-settings" }
   )

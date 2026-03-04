@@ -17,8 +17,10 @@ export function OrderEntry({
   autoSelectedSymbol,
   autoAskPrice,
 }: Props) {
-  const { dollarAmount, stopLossPercent, trailingStartPercent, trailingOffsetPercent } =
-    useSettingsStore();
+  const {
+    dollarAmount, stopLossPercent, trailingStartPercent, trailingOffsetPercent,
+    enableStopLoss, enableTrailing, setEnableStopLoss, setEnableTrailing,
+  } = useSettingsStore();
   const { sendOrder } = useWSStore();
 
   const [symbol, setSymbol] = useState(prefillSymbol || autoSelectedSymbol || "");
@@ -26,8 +28,6 @@ export function OrderEntry({
   const [orderType, setOrderType] = useState("market");
   const [positionIntent, setPositionIntent] = useState("buy_to_open");
   const [limitPrice, setLimitPrice] = useState("");
-  const [enableStopLoss, setEnableStopLoss] = useState(true);
-  const [enableTrailing, setEnableTrailing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

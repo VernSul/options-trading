@@ -86,12 +86,21 @@ export function useWebSocket() {
 
       try {
         switch (msg.type) {
-          case "bar":
-            useMarketStore.getState().addBar(normalizeBar(msg.payload));
+          case "bar": {
+            const bar = normalizeBar(msg.payload);
+            if (bar.symbol === useMarketStore.getState().currentSymbol) {
+              useMarketStore.getState().addBar(bar);
+            }
             break;
-          case "stock_quote":
-            useMarketStore.getState().setLatestQuote(normalizeStockQuote(msg.payload));
+          }
+          case "stock_quote": {
+            const sq = normalizeStockQuote(msg.payload);
+            // Only update if quote matches the current symbol
+            if (sq.symbol === useMarketStore.getState().currentSymbol) {
+              useMarketStore.getState().setLatestQuote(sq);
+            }
             break;
+          }
           case "option_quote": {
             const oq: OptionQuote = normalizeOptionQuote(msg.payload);
             useMarketStore.getState().setOptionQuote(oq);

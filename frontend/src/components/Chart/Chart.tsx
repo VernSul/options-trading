@@ -55,13 +55,18 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
   const pnlLinesRef = useRef<IPriceLine[]>([]);
   const riskLinesRef = useRef<IPriceLine[]>([]);
   const liveCandleRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
+  const prevBarsLenRef = useRef(0);
+  // Track which symbol the loaded bars belong to, to discard stale REST responses
+  const loadedSymbolRef = useRef("");
+  // Monotonic fetch counter to discard stale REST responses
+  const fetchIdRef = useRef(0);
 
   const { currentSymbol, bars, setBars, latestQuote } = useMarketStore();
   const { defaultTimeframe, setDefaultTimeframe } = useSettingsStore();
   const timeframe = defaultTimeframe;
   const setTimeframe = setDefaultTimeframe;
 
-  // Create chart
+  // Create chart once
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -122,24 +127,48 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
   // Load bars on symbol or timeframe change
   useEffect(() => {
     if (!currentSymbol) return;
+
+    // Reset chart state for new symbol
     shouldFitRef.current = true;
     liveCandleRef.current = null;
+    prevBarsLenRef.current = 0;
+    loadedSymbolRef.current = "";
+
+    // Clear chart immediately so stale candles don't linger
+    if (seriesRef.current) {
+      seriesRef.current.setData([]);
+    }
+
+    const myFetchId = ++fetchIdRef.current;
+
     rest.getBars(currentSymbol, timeframe).then((data) => {
-      if (data) setBars(normalizeBars(data));
+      // Discard if a newer fetch was started (symbol changed again)
+      if (myFetchId !== fetchIdRef.current) return;
+      if (data) {
+        loadedSymbolRef.current = currentSymbol;
+        setBars(normalizeBars(data));
+      }
     });
   }, [currentSymbol, timeframe, setBars]);
 
-  // Live price update from quotes — build candles from trade stream
-  const { addBar } = useMarketStore();
+  // Live price update from quotes — build candles from mid-price
   useEffect(() => {
-    if (!seriesRef.current || !latestQuote || bars.length === 0) return;
+    if (!seriesRef.current || !latestQuote) return;
+
+    // Read current bars directly from the store to avoid stale closure
+    const storeBars = useMarketStore.getState().bars;
+    if (storeBars.length === 0) return;
+
+    // Only process quotes for the currently loaded symbol
+    const storeSymbol = useMarketStore.getState().currentSymbol;
+    if (latestQuote.symbol !== storeSymbol) return;
+
     const mid = (latestQuote.bidPrice + latestQuote.askPrice) / 2;
     if (mid <= 0) return;
 
     const quoteTime = new Date(latestQuote.timestamp).getTime();
     if (isNaN(quoteTime)) return;
 
-    // Timeframe duration in ms
     const tfMs: Record<string, number> = {
       "1Min": 60_000, "5Min": 300_000, "15Min": 900_000,
       "1H": 3_600_000, "1D": 86_400_000,
@@ -151,10 +180,10 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     const lc = liveCandleRef.current;
 
     if (lc && bucketStart > lc.time) {
-      // New candle period — commit previous live candle to bars, start fresh
+      // New candle period — start fresh
       liveCandleRef.current = { time: bucketStart, open: mid, high: mid, low: mid, close: mid };
-      addBar({
-        symbol: currentSymbol,
+      useMarketStore.getState().addBar({
+        symbol: storeSymbol,
         timestamp: bucketISO,
         open: mid, high: mid, low: mid, close: mid,
         volume: 0, tradeCount: 0, vwap: 0,
@@ -164,32 +193,38 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
       lc.high = Math.max(lc.high, mid);
       lc.low = Math.min(lc.low, mid);
       lc.close = mid;
-      // Update chart directly (addBar would cause re-render loop)
-      seriesRef.current.update({
+      seriesRef.current!.update({
         time: (bucketStart / 1000) as Time,
         open: lc.open, high: lc.high, low: lc.low, close: mid,
       });
     } else {
       // No live candle yet — determine if we need a new one or update last bar
-      const lastBar = bars[bars.length - 1];
+      const lastBar = storeBars[storeBars.length - 1];
       const lastBarBucket = Math.floor(new Date(lastBar.timestamp).getTime() / bucketMs) * bucketMs;
 
       if (bucketStart > lastBarBucket) {
         // New period beyond last historical bar
         liveCandleRef.current = { time: bucketStart, open: mid, high: mid, low: mid, close: mid };
-        addBar({
-          symbol: currentSymbol,
+        useMarketStore.getState().addBar({
+          symbol: storeSymbol,
           timestamp: bucketISO,
           open: mid, high: mid, low: mid, close: mid,
           volume: 0, tradeCount: 0, vwap: 0,
         });
       } else {
-        // Same period as last bar — update it visually
-        seriesRef.current.update({
-          time: (lastBarBucket / 1000) as Time,
+        // Same period as last bar — update it visually + start tracking
+        liveCandleRef.current = {
+          time: lastBarBucket,
           open: lastBar.open,
           high: Math.max(lastBar.high, mid),
           low: Math.min(lastBar.low, mid),
+          close: mid,
+        };
+        seriesRef.current!.update({
+          time: (lastBarBucket / 1000) as Time,
+          open: lastBar.open,
+          high: liveCandleRef.current.high,
+          low: liveCandleRef.current.low,
           close: mid,
         });
       }
@@ -197,17 +232,21 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestQuote]);
 
-  // Track previous bars length to distinguish full load from live updates
-  const prevBarsLenRef = useRef(0);
-
-  // Update chart data
+  // Update chart data when bars change
   useEffect(() => {
-    if (!seriesRef.current || bars.length === 0) return;
+    if (!seriesRef.current) return;
+
+    // Bars cleared (symbol change) — clear chart
+    if (bars.length === 0) {
+      prevBarsLenRef.current = 0;
+      return;
+    }
 
     const prevLen = prevBarsLenRef.current;
     prevBarsLenRef.current = bars.length;
 
-    // Full load (symbol/timeframe change) or first load
+    // Full load (symbol/timeframe change) — always setData when shouldFit or when
+    // prevLen was 0 (transition from empty bars to populated bars)
     if (shouldFitRef.current || prevLen === 0) {
       const candles = bars.map(barToCandle);
       seriesRef.current.setData(candles);
@@ -227,7 +266,6 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     const series = seriesRef.current;
     if (!series) return;
 
-    // Clear old lines
     for (const line of pnlLinesRef.current) {
       series.removePriceLine(line);
     }
@@ -255,7 +293,6 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     const series = seriesRef.current;
     if (!series) return;
 
-    // Clear old lines
     for (const line of riskLinesRef.current) {
       series.removePriceLine(line);
     }

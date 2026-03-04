@@ -11,6 +11,7 @@ import (
 	"options-trading/finnhub"
 	"options-trading/hub"
 	"options-trading/orders"
+	"options-trading/tiingo"
 
 	"github.com/go-chi/chi/v5"
 	chiCors "github.com/go-chi/cors"
@@ -27,6 +28,7 @@ type Server struct {
 	StockStream    *alpacaClient.StockStream
 	OptionStream   *alpacaClient.OptionStream
 	FinnhubStream  *finnhub.Stream
+	TiingoStream   *tiingo.Stream
 	OrderManager   *orders.OrderManager
 	CrossingEngine *orders.CrossingEngine
 	AllowedOrigins string
@@ -101,6 +103,9 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 					if s.FinnhubStream != nil {
 						s.FinnhubStream.Subscribe(sym)
 					}
+					if s.TiingoStream != nil {
+						s.TiingoStream.Subscribe(sym)
+					}
 				case "option_quotes":
 					if err := s.OptionStream.SubscribeToQuotes(sym); err != nil {
 						log.Printf("WS subscribe option_quotes %s error: %v", sym, err)
@@ -117,6 +122,9 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 					s.StockStream.UnsubscribeFromQuotes(sym)
 					if s.FinnhubStream != nil {
 						s.FinnhubStream.Unsubscribe(sym)
+					}
+					if s.TiingoStream != nil {
+						s.TiingoStream.Unsubscribe(sym)
 					}
 				case "option_quotes":
 					s.OptionStream.UnsubscribeFromQuotes(sym)

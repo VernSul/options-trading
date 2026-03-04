@@ -13,6 +13,7 @@ import (
 	"options-trading/finnhub"
 	"options-trading/hub"
 	"options-trading/orders"
+	"options-trading/tiingo"
 
 	"github.com/alpacahq/alpaca-trade-api-go/v3/marketdata/stream"
 	"github.com/shopspring/decimal"
@@ -60,6 +61,7 @@ func main() {
 	optionStream := alpacaClient.NewOptionStream(cfg.AlpacaAPIKey, cfg.AlpacaAPISecret)
 	tradingStream := alpacaClient.NewTradingStream(client.Trading)
 	finnhubStream := finnhub.NewStream(cfg.FinnhubAPIKey)
+	tiingoStream := tiingo.NewStream(cfg.TiingoAPIKey)
 
 	// Init order manager
 	orderMgr := orders.NewOrderManager(client.Trading)
@@ -122,6 +124,28 @@ func main() {
 		crossingEngine.CheckPrice(symbol, mid)
 	}
 
+	// Tiingo IEX stream -> hub + crossing engine (additional quote source)
+	tiingoStream.OnTrade = func(symbol string, price float64, volume int64, timestamp time.Time) {
+		wsHub.BroadcastMessage(hub.MsgStockQuote, map[string]interface{}{
+			"Symbol":    symbol,
+			"BidPrice":  price,
+			"AskPrice":  price,
+			"Timestamp": timestamp,
+		})
+		mid := decimal.NewFromFloat(price)
+		crossingEngine.CheckPrice(symbol, mid)
+	}
+	tiingoStream.OnQuote = func(symbol string, bidPrice, askPrice float64, timestamp time.Time) {
+		wsHub.BroadcastMessage(hub.MsgStockQuote, map[string]interface{}{
+			"Symbol":    symbol,
+			"BidPrice":  bidPrice,
+			"AskPrice":  askPrice,
+			"Timestamp": timestamp,
+		})
+		mid := decimal.NewFromFloat((bidPrice + askPrice) / 2)
+		crossingEngine.CheckPrice(symbol, mid)
+	}
+
 	// Wire option stream -> hub + trailing stop engine
 	optionStream.OnQuote = func(q stream.OptionQuote) {
 		wsHub.BroadcastMessage(hub.MsgOptionQuote, q)
@@ -164,6 +188,13 @@ func main() {
 	} else {
 		log.Println("Warning: FINNHUB_API_KEY not set, Finnhub stream disabled")
 	}
+	if cfg.TiingoAPIKey != "" {
+		if err := tiingoStream.Connect(ctx); err != nil {
+			log.Printf("Warning: Tiingo stream connect failed: %v", err)
+		}
+	} else {
+		log.Println("Warning: TIINGO_API_KEY not set, Tiingo stream disabled")
+	}
 
 	// HTTP server
 	server := &api.Server{
@@ -172,6 +203,7 @@ func main() {
 		StockStream:    stockStream,
 		OptionStream:   optionStream,
 		FinnhubStream:  finnhubStream,
+		TiingoStream:   tiingoStream,
 		OrderManager:   orderMgr,
 		CrossingEngine: crossingEngine,
 		AllowedOrigins: cfg.AllowedOrigins,

@@ -280,6 +280,37 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestQuote]);
 
+  // Polling fallback: fetch REST quote every 5s if no live quote is arriving
+  useEffect(() => {
+    if (!currentSymbol) return;
+
+    const timer = setInterval(async () => {
+      const quote = useMarketStore.getState().latestQuote;
+      const quoteAge = quote ? Date.now() - new Date(quote.timestamp).getTime() : Infinity;
+      // Only poll if quote is stale (>5s old) or missing
+      if (quoteAge < 5000) return;
+
+      try {
+        const data = await rest.getQuote(currentSymbol);
+        if (!data || !data.bp || !data.ap) return;
+        // Only update if still the same symbol
+        if (useMarketStore.getState().currentSymbol !== currentSymbol) return;
+        useMarketStore.getState().setLatestQuote({
+          symbol: currentSymbol,
+          bidPrice: data.bp,
+          askPrice: data.ap,
+          bidSize: data.bs ?? 0,
+          askSize: data.as ?? 0,
+          timestamp: data.t || new Date().toISOString(),
+        });
+      } catch {
+        // Ignore polling errors
+      }
+    }, 5000);
+
+    return () => clearInterval(timer);
+  }, [currentSymbol]);
+
   // P&L projection lines
   useEffect(() => {
     const series = seriesRef.current;

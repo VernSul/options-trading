@@ -103,11 +103,17 @@ func (ss *StockStream) SubscribeToBars(symbols ...string) error {
 	}
 	ss.mu.Unlock()
 
-	return ss.client.SubscribeToBars(func(b stream.Bar) {
+	err := ss.client.SubscribeToBars(func(b stream.Bar) {
 		if ss.OnBar != nil {
 			ss.OnBar(b)
 		}
 	}, symbols...)
+	if err != nil {
+		log.Printf("Alpaca stock: SubscribeToBars %v failed: %v", symbols, err)
+	} else {
+		log.Printf("Alpaca stock: subscribed to bars %v", symbols)
+	}
+	return err
 }
 
 func (ss *StockStream) UnsubscribeFromBars(symbols ...string) error {
@@ -127,11 +133,17 @@ func (ss *StockStream) SubscribeToQuotes(symbols ...string) error {
 	}
 	ss.mu.Unlock()
 
-	return ss.client.SubscribeToQuotes(func(q stream.Quote) {
+	err := ss.client.SubscribeToQuotes(func(q stream.Quote) {
 		if ss.OnQuote != nil {
 			ss.OnQuote(q)
 		}
 	}, symbols...)
+	if err != nil {
+		log.Printf("Alpaca stock: SubscribeToQuotes %v failed: %v", symbols, err)
+	} else {
+		log.Printf("Alpaca stock: subscribed to quotes %v", symbols)
+	}
+	return err
 }
 
 func (ss *StockStream) UnsubscribeFromQuotes(symbols ...string) error {

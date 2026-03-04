@@ -86,21 +86,29 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	client := hub.NewClient(s.Hub, conn, func(msg hub.ClientMessage) {
 		switch msg.Type {
 		case "subscribe":
+			log.Printf("WS subscribe: channel=%s symbols=%v", msg.Channel, msg.Symbols)
 			for _, sym := range msg.Symbols {
 				switch msg.Channel {
 				case "bars":
-					s.StockStream.SubscribeToBars(sym)
+					if err := s.StockStream.SubscribeToBars(sym); err != nil {
+						log.Printf("WS subscribe bars %s error: %v", sym, err)
+					}
 				case "quotes":
 					// Subscribe to both Alpaca IEX and Finnhub for coverage
-					s.StockStream.SubscribeToQuotes(sym)
+					if err := s.StockStream.SubscribeToQuotes(sym); err != nil {
+						log.Printf("WS subscribe quotes %s error: %v", sym, err)
+					}
 					if s.FinnhubStream != nil {
 						s.FinnhubStream.Subscribe(sym)
 					}
 				case "option_quotes":
-					s.OptionStream.SubscribeToQuotes(sym)
+					if err := s.OptionStream.SubscribeToQuotes(sym); err != nil {
+						log.Printf("WS subscribe option_quotes %s error: %v", sym, err)
+					}
 				}
 			}
 		case "unsubscribe":
+			log.Printf("WS unsubscribe: channel=%s symbols=%v", msg.Channel, msg.Symbols)
 			for _, sym := range msg.Symbols {
 				switch msg.Channel {
 				case "bars":

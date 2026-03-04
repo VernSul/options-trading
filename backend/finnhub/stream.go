@@ -43,69 +43,88 @@ func NewStream(apiKey string) *Stream {
 func (s *Stream) Connect(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
-	return s.connectAndListen(ctx)
-}
 
-func (s *Stream) connectAndListen(ctx context.Context) error {
 	if err := s.dial(); err != nil {
+		// Initial connect failed — start background reconnect loop
+		go s.reconnectLoop(ctx)
 		return err
 	}
 
-	go s.readLoop(ctx)
+	go s.runLoop(ctx)
 	return nil
 }
 
 func (s *Stream) dial() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	old := s.conn
+	s.mu.Unlock()
+
+	// Close old connection if any
+	if old != nil {
+		old.Close()
+	}
 
 	url := wsURL + "?token=" + s.apiKey
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		return err
 	}
+
+	s.mu.Lock()
 	s.conn = conn
-	log.Println("Finnhub: connected")
-
-	// Re-subscribe to all symbols (already holding mu)
+	// Re-subscribe to all symbols
 	for sym := range s.subs {
-		s.writeSubscribe(conn, sym)
+		msg, _ := json.Marshal(map[string]string{
+			"type":   "subscribe",
+			"symbol": sym,
+		})
+		conn.WriteMessage(websocket.TextMessage, msg)
 	}
+	s.mu.Unlock()
 
+	log.Println("Finnhub: connected")
 	return nil
 }
 
-// writeSubscribe sends a subscribe message on the given conn. Caller must ensure conn is valid.
-func (s *Stream) writeSubscribe(conn *websocket.Conn, symbol string) {
-	msg, _ := json.Marshal(map[string]string{
-		"type":   "subscribe",
-		"symbol": symbol,
-	})
-	conn.WriteMessage(websocket.TextMessage, msg)
+// runLoop reads messages until error, then enters reconnect loop. Only one goroutine runs this.
+func (s *Stream) runLoop(ctx context.Context) {
+	for {
+		// Read phase
+		err := s.readUntilError(ctx)
+		if err == nil {
+			// Context cancelled
+			return
+		}
+		log.Printf("Finnhub: read error: %v", err)
+
+		// Reconnect phase (blocking — no new goroutines)
+		if !s.reconnectLoop(ctx) {
+			return // context cancelled
+		}
+	}
 }
 
-func (s *Stream) readLoop(ctx context.Context) {
+// readUntilError reads messages until an error occurs or context is cancelled.
+// Returns nil if context is cancelled, error otherwise.
+func (s *Stream) readUntilError(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		default:
 		}
 
-		// Copy conn ref under lock so we don't race with dial()
 		s.mu.Lock()
 		conn := s.conn
 		s.mu.Unlock()
 
 		if conn == nil {
-			return
+			return nil
 		}
 
 		_, data, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("Finnhub: read error: %v", err)
-			s.reconnect(ctx)
-			return
+			return err
 		}
 
 		var msg wsMessage
@@ -121,11 +140,12 @@ func (s *Stream) readLoop(ctx context.Context) {
 	}
 }
 
-func (s *Stream) reconnect(ctx context.Context) {
+// reconnectLoop tries to reconnect with backoff. Returns true if connected, false if context cancelled.
+func (s *Stream) reconnectLoop(ctx context.Context) bool {
 	for attempt := 1; ; attempt++ {
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		default:
 		}
 
@@ -134,15 +154,19 @@ func (s *Stream) reconnect(ctx context.Context) {
 			delay = 30 * time.Second
 		}
 		log.Printf("Finnhub: reconnecting in %v (attempt %d)", delay, attempt)
-		time.Sleep(delay)
+
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(delay):
+		}
 
 		if err := s.dial(); err != nil {
 			log.Printf("Finnhub: reconnect failed: %v", err)
 			continue
 		}
 
-		go s.readLoop(ctx)
-		return
+		return true
 	}
 }
 
@@ -153,7 +177,11 @@ func (s *Stream) Subscribe(symbol string) {
 	s.mu.Unlock()
 
 	if conn != nil {
-		s.writeSubscribe(conn, symbol)
+		msg, _ := json.Marshal(map[string]string{
+			"type":   "subscribe",
+			"symbol": symbol,
+		})
+		conn.WriteMessage(websocket.TextMessage, msg)
 	}
 	log.Printf("Finnhub: subscribed to %s", symbol)
 }

@@ -6,7 +6,7 @@ import { useAccountStore } from "../stores/useAccountStore";
 import { useCrossingStore } from "../stores/useCrossingStore";
 import { useWSStore } from "../stores/useWSStore";
 import { showToast } from "../components/common/Toast";
-import type { WSMessage, TradeUpdate, Position, Account, Order, SmartOrderRequest, OptionQuote } from "../types";
+import type { WSMessage, TradeUpdate, Position, Account, Order, SmartOrderRequest, OptionQuote, TrailingStopUpdate } from "../types";
 import { normalizeBar, normalizeStockQuote, normalizeOptionQuote } from "../utils/normalize";
 
 const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8080/ws";
@@ -141,6 +141,23 @@ export function useWebSocket() {
           case "crossing_triggered": {
             const data = msg.payload as { alert: { id: string } };
             useCrossingStore.getState().markTriggered(data.alert.id);
+            break;
+          }
+          case "trailing_stop_update": {
+            const ts = msg.payload as TrailingStopUpdate;
+            if (ts.active) {
+              showToast(`Trailing active: ${ts.symbol} HW=$${ts.highWater}`, "success");
+            }
+            break;
+          }
+          case "trailing_stop_fired": {
+            const ts = msg.payload as TrailingStopUpdate;
+            showToast(`Trailing fired — closing ${ts.symbol}`, "info");
+            break;
+          }
+          case "stop_loss_placed": {
+            const data = msg.payload as { symbol: string; stopPrice: string };
+            showToast(`Safety stop placed: ${data.symbol} @ $${data.stopPrice}`, "info");
             break;
           }
           case "heartbeat":

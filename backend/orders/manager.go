@@ -64,15 +64,17 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 
 	if req.TrailingStop != nil {
 		om.trailingStops[order.ID] = &TrailingStop{
-			OrderID:     order.ID,
-			Symbol:      req.Symbol,
-			Qty:         req.Qty,
-			TrailAmount: req.TrailingStop.TrailAmount,
-			SafetyStop:  req.TrailingStop.SafetyStop,
-			Active:      false,
+			OrderID:       order.ID,
+			Symbol:        req.Symbol,
+			Qty:           req.Qty,
+			TrailAmount:   req.TrailingStop.TrailAmount,
+			SafetyStop:    req.TrailingStop.SafetyStop,
+			StartPercent:  req.TrailingStop.StartPercent,
+			OffsetPercent: req.TrailingStop.OffsetPercent,
+			Active:        false,
 		}
-		log.Printf("Queued trailing stop for order %s trail=%s safety=%s",
-			order.ID, req.TrailingStop.TrailAmount, req.TrailingStop.SafetyStop)
+		log.Printf("Queued trailing stop for order %s startPercent=%s offsetPercent=%s safety=%s",
+			order.ID, req.TrailingStop.StartPercent, req.TrailingStop.OffsetPercent, req.TrailingStop.SafetyStop)
 	}
 
 	return order, nil
@@ -90,8 +92,9 @@ func (om *OrderManager) HandleFill(orderID string, filledPrice decimal.Decimal) 
 
 	// Check for pending trailing stop
 	if ts, ok := om.trailingStops[orderID]; ok {
-		ts.HighWater = filledPrice
-		ts.Active = true
+		ts.EntryPrice = filledPrice
+		// Stay inactive — engine will activate when price reaches start threshold
+		ts.Active = false
 
 		// Place wide safety-net stop on Alpaca
 		go om.placeSafetyNetStop(ts)
@@ -151,6 +154,14 @@ func (om *OrderManager) placeSafetyNetStop(ts *TrailingStop) {
 		return
 	}
 	log.Printf("Safety-net stop placed: id=%s symbol=%s stop=%s", order.ID, ts.Symbol, ts.SafetyStop)
+
+	om.mu.Lock()
+	ts.SafetyOrderID = order.ID
+	om.mu.Unlock()
+
+	if om.OnStopPlaced != nil {
+		om.OnStopPlaced(ts.OrderID, order)
+	}
 }
 
 func (om *OrderManager) GetActiveTrailingStops() []*TrailingStop {
@@ -161,6 +172,16 @@ func (om *OrderManager) GetActiveTrailingStops() []*TrailingStop {
 		if ts.Active {
 			stops = append(stops, ts)
 		}
+	}
+	return stops
+}
+
+func (om *OrderManager) GetAllTrailingStops() []*TrailingStop {
+	om.mu.Lock()
+	defer om.mu.Unlock()
+	var stops []*TrailingStop
+	for _, ts := range om.trailingStops {
+		stops = append(stops, ts)
 	}
 	return stops
 }

@@ -78,11 +78,7 @@ func main() {
 	}
 
 	trailingEngine.OnFired = func(ts *orders.TrailingStop, closeOrder *alpacaAPI.Order) {
-		wsHub.BroadcastMessage(hub.MsgTrailingStopUpdate, map[string]interface{}{
-			"trailingStop": ts,
-			"closeOrderId": closeOrder.ID,
-			"fired":        true,
-		})
+		wsHub.BroadcastMessage(hub.MsgTrailingStopFired, ts)
 	}
 
 	crossingEngine.OnTriggered = func(alert *orders.CrossingAlert, order *alpacaAPI.Order) {

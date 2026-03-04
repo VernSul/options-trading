@@ -99,6 +99,8 @@ export interface SmartOrderRequest {
   trailingStop?: {
     trailAmount: string;
     safetyStop: string;
+    startPercent: string;
+    offsetPercent: string;
   };
 }
 
@@ -161,4 +163,7 @@ export interface TrailingStopUpdate {
   highWater: string;
   safetyStop: string;
   active: boolean;
+  entryPrice: string;
+  startPercent: string;
+  offsetPercent: string;
 }

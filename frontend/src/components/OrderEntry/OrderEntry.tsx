@@ -100,6 +100,8 @@ export function OrderEntry({
       order.trailingStop = {
         trailAmount: computedTrailAmount.toFixed(2),
         safetyStop: computedSafetyStop > 0 ? computedSafetyStop.toFixed(2) : (entryPrice * 0.5).toFixed(2),
+        startPercent: trailingStartPercent.toString(),
+        offsetPercent: trailingOffsetPercent.toString(),
       };
     }
 

@@ -24,6 +24,7 @@ const (
 	MsgCrossingTriggered  = "crossing_triggered"
 	MsgStopLossPlaced     = "stop_loss_placed"
 	MsgTrailingStopUpdate = "trailing_stop_update"
+	MsgTrailingStopFired  = "trailing_stop_fired"
 	MsgHeartbeat          = "heartbeat"
 	MsgError              = "error"
 	MsgOrderPlaced        = "order_placed"

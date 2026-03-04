@@ -20,8 +20,10 @@ type StopLossConfig struct {
 }
 
 type TrailingConfig struct {
-	TrailAmount decimal.Decimal `json:"trailAmount"` // dollar amount below high water
-	SafetyStop  decimal.Decimal `json:"safetyStop"`  // wide safety-net stop price
+	TrailAmount   decimal.Decimal `json:"trailAmount"`   // dollar amount below high water (used for safety-net)
+	SafetyStop    decimal.Decimal `json:"safetyStop"`    // wide safety-net stop price
+	StartPercent  decimal.Decimal `json:"startPercent"`  // % gain from entry to activate trailing (e.g. 0.02 = 2%)
+	OffsetPercent decimal.Decimal `json:"offsetPercent"` // % drop from high-water to trigger close (e.g. 0.01 = 1%)
 }
 
 type CrossingAlert struct {
@@ -39,13 +41,17 @@ type CrossingAlert struct {
 }
 
 type TrailingStop struct {
-	OrderID     string          `json:"orderId"`     // entry order ID
-	Symbol      string          `json:"symbol"`      // option symbol
-	Qty         int             `json:"qty"`
-	TrailAmount decimal.Decimal `json:"trailAmount"`
-	HighWater   decimal.Decimal `json:"highWater"`
-	SafetyStop  decimal.Decimal `json:"safetyStop"`
-	Active      bool            `json:"active"`
+	OrderID       string          `json:"orderId"`       // entry order ID
+	Symbol        string          `json:"symbol"`        // option symbol
+	Qty           int             `json:"qty"`
+	TrailAmount   decimal.Decimal `json:"trailAmount"`
+	HighWater     decimal.Decimal `json:"highWater"`
+	SafetyStop    decimal.Decimal `json:"safetyStop"`
+	Active        bool            `json:"active"`
+	EntryPrice    decimal.Decimal `json:"entryPrice"`    // filled price of entry order
+	StartPercent  decimal.Decimal `json:"startPercent"`  // % gain to activate (e.g. 0.02)
+	OffsetPercent decimal.Decimal `json:"offsetPercent"` // % drop from high-water to fire (e.g. 0.01)
+	SafetyOrderID string          `json:"safetyOrderId"` // Alpaca order ID for safety-net stop
 }
 
 type PendingStopLoss struct {

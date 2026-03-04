@@ -6,6 +6,7 @@ type Config struct {
 	AlpacaAPIKey    string
 	AlpacaAPISecret string
 	AlpacaBaseURL   string
+	FinnhubAPIKey   string
 	Port            string
 	AllowedOrigins  string
 }
@@ -15,6 +16,7 @@ func Load() *Config {
 		AlpacaAPIKey:    getEnv("ALPACA_API_KEY", ""),
 		AlpacaAPISecret: getEnv("ALPACA_API_SECRET", ""),
 		AlpacaBaseURL:   getEnv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets"),
+		FinnhubAPIKey:   getEnv("FINNHUB_API_KEY", ""),
 		Port:            getEnv("PORT", "8080"),
 		AllowedOrigins:  getEnv("ALLOWED_ORIGINS", "http://localhost:5173"),
 	}

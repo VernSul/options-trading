@@ -10,6 +10,7 @@ import (
 	alpacaClient "options-trading/alpaca"
 	"options-trading/api"
 	"options-trading/config"
+	"options-trading/finnhub"
 	"options-trading/hub"
 	"options-trading/orders"
 
@@ -98,14 +99,28 @@ func main() {
 	optionStream := alpacaClient.NewOptionStream(cfg.AlpacaAPIKey, cfg.AlpacaAPISecret)
 	tradingStream := alpacaClient.NewTradingStream(client.Trading)
 
-	// Wire stock stream -> hub + crossing engine
+	// Wire stock stream -> hub (bars only, quotes replaced by Finnhub)
 	stockStream.OnBar = func(b stream.Bar) {
 		wsHub.BroadcastMessage(hub.MsgBar, b)
 	}
-	stockStream.OnQuote = func(q stream.Quote) {
-		wsHub.BroadcastMessage(hub.MsgStockQuote, q)
-		mid := decimal.NewFromFloat((q.BidPrice + q.AskPrice) / 2)
-		crossingEngine.CheckPrice(q.Symbol, mid)
+	// Alpaca IEX quote stream disabled — unreliable, replaced by Finnhub trades
+	// stockStream.OnQuote = func(q stream.Quote) {
+	// 	wsHub.BroadcastMessage(hub.MsgStockQuote, q)
+	// 	mid := decimal.NewFromFloat((q.BidPrice + q.AskPrice) / 2)
+	// 	crossingEngine.CheckPrice(q.Symbol, mid)
+	// }
+
+	// Finnhub trade stream -> hub + crossing engine (replaces Alpaca IEX quotes)
+	finnhubStream := finnhub.NewStream(cfg.FinnhubAPIKey)
+	finnhubStream.OnTrade = func(symbol string, price float64, volume int64, timestamp int64) {
+		wsHub.BroadcastMessage(hub.MsgStockQuote, map[string]interface{}{
+			"Symbol":   symbol,
+			"BidPrice": price,
+			"AskPrice": price,
+			"Timestamp": time.Unix(0, timestamp*int64(time.Millisecond)).UTC(),
+		})
+		mid := decimal.NewFromFloat(price)
+		crossingEngine.CheckPrice(symbol, mid)
 	}
 
 	// Wire option stream -> hub + trailing stop engine
@@ -143,6 +158,13 @@ func main() {
 		log.Printf("Warning: option stream connect failed: %v", err)
 	}
 	tradingStream.Start(ctx)
+	if cfg.FinnhubAPIKey != "" {
+		if err := finnhubStream.Connect(ctx); err != nil {
+			log.Printf("Warning: Finnhub stream connect failed: %v", err)
+		}
+	} else {
+		log.Println("Warning: FINNHUB_API_KEY not set, Finnhub stream disabled")
+	}
 
 	// HTTP server
 	server := &api.Server{
@@ -150,6 +172,7 @@ func main() {
 		Hub:            wsHub,
 		StockStream:    stockStream,
 		OptionStream:   optionStream,
+		FinnhubStream:  finnhubStream,
 		OrderManager:   orderMgr,
 		CrossingEngine: crossingEngine,
 		AllowedOrigins: cfg.AllowedOrigins,

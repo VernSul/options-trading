@@ -8,6 +8,7 @@ import (
 	"time"
 
 	alpacaClient "options-trading/alpaca"
+	"options-trading/finnhub"
 	"options-trading/hub"
 	"options-trading/orders"
 
@@ -25,6 +26,7 @@ type Server struct {
 	Hub            *hub.Hub
 	StockStream    *alpacaClient.StockStream
 	OptionStream   *alpacaClient.OptionStream
+	FinnhubStream  *finnhub.Stream
 	OrderManager   *orders.OrderManager
 	CrossingEngine *orders.CrossingEngine
 	AllowedOrigins string
@@ -89,7 +91,10 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				case "bars":
 					s.StockStream.SubscribeToBars(sym)
 				case "quotes":
-					s.StockStream.SubscribeToQuotes(sym)
+					// Route stock quotes to Finnhub (Alpaca IEX disabled)
+					if s.FinnhubStream != nil {
+						s.FinnhubStream.Subscribe(sym)
+					}
 				case "option_quotes":
 					s.OptionStream.SubscribeToQuotes(sym)
 				}
@@ -100,7 +105,10 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				case "bars":
 					s.StockStream.UnsubscribeFromBars(sym)
 				case "quotes":
-					s.StockStream.UnsubscribeFromQuotes(sym)
+					// Route stock quotes to Finnhub (Alpaca IEX disabled)
+					if s.FinnhubStream != nil {
+						s.FinnhubStream.Unsubscribe(sym)
+					}
 				case "option_quotes":
 					s.OptionStream.UnsubscribeFromQuotes(sym)
 				}

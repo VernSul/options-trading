@@ -55,22 +55,43 @@ body {
 
 .left-column {
   flex: 1;
-  overflow-y: auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-right: 1px solid var(--border);
 }
 
 .right-column {
-  width: 400px;
+  width: 360px;
+  min-width: 280px;
+  max-width: 50vw;
   overflow-y: auto;
   padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  resize: horizontal;
+  direction: rtl; /* resize handle on left edge */
+}
+
+.right-column > * {
+  direction: ltr;
 }
 
 /* Chart */
 .chart-container {
+  flex: 1 1 0;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-bottom: 1px solid var(--border);
+}
+
+.chart-container .chart-canvas {
+  flex: 1;
+  min-height: 0;
 }
 
 .chart-header {
@@ -335,6 +356,13 @@ body {
 .options-chain {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+  min-height: 80px;
+  max-height: 50vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  resize: vertical;
 }
 
 .options-chain h3 {
@@ -360,7 +388,8 @@ body {
 }
 
 .chain-table-wrapper {
-  max-height: 300px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -417,6 +446,8 @@ body {
 /* Crossing Alerts */
 .crossing-alerts {
   padding: 8px 12px;
+  flex: 0 0 auto;
+  overflow-y: auto;
 }
 
 .crossing-alerts h3 {

@@ -101,15 +101,20 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     chartRef.current = chart;
     seriesRef.current = series;
 
-    const handleResize = () => {
-      if (containerRef.current) {
-        chart.applyOptions({ width: containerRef.current.clientWidth });
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          chart.applyOptions({ width, height });
+        }
       }
-    };
-    window.addEventListener("resize", handleResize);
+    });
+    if (containerRef.current) {
+      ro.observe(containerRef.current);
+    }
 
     return () => {
-      window.removeEventListener("resize", handleResize);
+      ro.disconnect();
       chart.remove();
     };
   }, []);
@@ -304,7 +309,7 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
           ))}
         </div>
       </div>
-      <div ref={containerRef} style={{ width: "100%", height: "400px" }} />
+      <div ref={containerRef} className="chart-canvas" />
     </div>
   );
 }

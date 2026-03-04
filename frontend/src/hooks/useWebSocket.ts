@@ -111,8 +111,10 @@ export function useWebSocket() {
           case "trade_update": {
             const tu = msg.payload as TradeUpdate;
             useOrderStore.getState().updateOrder(tu.order);
-            if (tu.event === "fill" || tu.event === "canceled") {
+            if (tu.event === "fill" || tu.event === "canceled" || tu.event === "partial_fill") {
               useOrderStore.getState().fetchOrders();
+              usePositionStore.getState().fetchPositions();
+              useAccountStore.getState().fetchAccount();
             }
             break;
           }

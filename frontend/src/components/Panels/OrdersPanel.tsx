@@ -10,12 +10,23 @@ export function OrdersPanel() {
     fetchOrders();
   }, [fetchOrders]);
 
+  const handleCancel = (id: string) => {
+    cancelOrder(id);
+    setTimeout(fetchOrders, 1000);
+  };
+
+  const handleCancelAll = () => {
+    cancelAllOrders();
+    setTimeout(fetchOrders, 1000);
+    setTimeout(fetchOrders, 3000);
+  };
+
   return (
     <div className="panel orders-panel">
       <div className="panel-header">
         <h3>Orders {loading && <span className="loading">...</span>}</h3>
         {orders.length > 0 && (
-          <button className="btn btn-small btn-danger" onClick={cancelAllOrders}>
+          <button className="btn btn-small btn-danger" onClick={handleCancelAll}>
             Cancel All
           </button>
         )}
@@ -54,7 +65,7 @@ export function OrdersPanel() {
                     order.status === "pending_new") && (
                     <button
                       className="btn btn-small btn-danger"
-                      onClick={() => cancelOrder(order.id)}
+                      onClick={() => handleCancel(order.id)}
                     >
                       Cancel
                     </button>

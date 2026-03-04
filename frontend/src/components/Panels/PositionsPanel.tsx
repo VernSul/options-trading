@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 import { usePositionStore } from "../../stores/usePositionStore";
+import { useOrderStore } from "../../stores/useOrderStore";
+import { useAccountStore } from "../../stores/useAccountStore";
 import { useWSStore } from "../../stores/useWSStore";
 import { formatPrice, formatPL, formatPercent, formatQty } from "../../utils/format";
 import { showToast } from "../common/Toast";
@@ -15,15 +17,30 @@ export function PositionsPanel() {
     return () => clearInterval(interval);
   }, [fetchPositions]);
 
+  const refreshAll = () => {
+    setTimeout(() => {
+      fetchPositions();
+      useOrderStore.getState().fetchOrders();
+      useAccountStore.getState().fetchAccount();
+    }, 1000);
+    setTimeout(() => {
+      fetchPositions();
+      useOrderStore.getState().fetchOrders();
+      useAccountStore.getState().fetchAccount();
+    }, 3000);
+  };
+
   const handleClose = (symbol: string) => {
     closePosition(symbol);
     showToast(`Closing ${symbol}`, "info");
+    refreshAll();
   };
 
   const handleCloseAll = () => {
     cancelAllOrders();
     closeAllPositions();
     showToast("Cancelling orders & closing all positions", "info");
+    refreshAll();
   };
 
   return (

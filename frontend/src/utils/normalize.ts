@@ -31,15 +31,16 @@ export function normalizeStockQuote(raw: any): StockQuote {
   };
 }
 
+// Alpaca option WS sends snake_case: symbol, bid_price, bid_size, ask_price, ask_size, timestamp
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function normalizeOptionQuote(raw: any): OptionQuote {
   return {
-    symbol: raw.S || raw.Symbol || "",
-    bidPrice: raw.bp ?? raw.BidPrice ?? 0,
-    bidSize: raw.bs ?? raw.BidSize ?? 0,
-    askPrice: raw.ap ?? raw.AskPrice ?? 0,
-    askSize: raw.as ?? raw.AskSize ?? 0,
-    timestamp: raw.t || raw.Timestamp || "",
+    symbol: raw.S || raw.Symbol || raw.symbol || "",
+    bidPrice: raw.bp ?? raw.BidPrice ?? raw.bid_price ?? 0,
+    bidSize: raw.bs ?? raw.BidSize ?? raw.bid_size ?? 0,
+    askPrice: raw.ap ?? raw.AskPrice ?? raw.ask_price ?? 0,
+    askSize: raw.as ?? raw.AskSize ?? raw.ask_size ?? 0,
+    timestamp: raw.t || raw.Timestamp || raw.timestamp || "",
   };
 }
 

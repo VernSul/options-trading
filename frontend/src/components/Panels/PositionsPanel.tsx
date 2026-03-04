@@ -10,6 +10,9 @@ export function PositionsPanel() {
 
   useEffect(() => {
     fetchPositions();
+    // Periodically refresh positions from Alpaca for authoritative values
+    const interval = setInterval(fetchPositions, 30_000);
+    return () => clearInterval(interval);
   }, [fetchPositions]);
 
   const handleClose = (symbol: string) => {

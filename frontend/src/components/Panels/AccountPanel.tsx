@@ -1,13 +1,22 @@
 import { useEffect } from "react";
 import { useAccountStore } from "../../stores/useAccountStore";
+import { usePositionStore } from "../../stores/usePositionStore";
 import { formatPrice } from "../../utils/format";
 
 export function AccountPanel() {
   const { account, loading, fetchAccount } = useAccountStore();
+  const positions = usePositionStore((s) => s.positions);
 
   useEffect(() => {
     fetchAccount();
   }, [fetchAccount]);
+
+  // Re-fetch account periodically when positions are open
+  useEffect(() => {
+    if (positions.length === 0) return;
+    const interval = setInterval(fetchAccount, 10_000);
+    return () => clearInterval(interval);
+  }, [positions.length, fetchAccount]);
 
   if (loading && !account) return <div className="panel">Loading account...</div>;
   if (!account) return <div className="panel">Failed to load account</div>;

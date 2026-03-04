@@ -67,12 +67,21 @@ func (s *Stream) dial() error {
 	s.conn = conn
 	log.Println("Finnhub: connected")
 
-	// Re-subscribe to all symbols
+	// Re-subscribe to all symbols (already holding mu)
 	for sym := range s.subs {
-		s.sendSubscribe(sym)
+		s.writeSubscribe(conn, sym)
 	}
 
 	return nil
+}
+
+// writeSubscribe sends a subscribe message on the given conn. Caller must ensure conn is valid.
+func (s *Stream) writeSubscribe(conn *websocket.Conn, symbol string) {
+	msg, _ := json.Marshal(map[string]string{
+		"type":   "subscribe",
+		"symbol": symbol,
+	})
+	conn.WriteMessage(websocket.TextMessage, msg)
 }
 
 func (s *Stream) readLoop(ctx context.Context) {
@@ -83,7 +92,16 @@ func (s *Stream) readLoop(ctx context.Context) {
 		default:
 		}
 
-		_, data, err := s.conn.ReadMessage()
+		// Copy conn ref under lock so we don't race with dial()
+		s.mu.Lock()
+		conn := s.conn
+		s.mu.Unlock()
+
+		if conn == nil {
+			return
+		}
+
+		_, data, err := conn.ReadMessage()
 		if err != nil {
 			log.Printf("Finnhub: read error: %v", err)
 			s.reconnect(ctx)
@@ -131,39 +149,27 @@ func (s *Stream) reconnect(ctx context.Context) {
 func (s *Stream) Subscribe(symbol string) {
 	s.mu.Lock()
 	s.subs[symbol] = true
+	conn := s.conn
 	s.mu.Unlock()
 
-	s.sendSubscribe(symbol)
+	if conn != nil {
+		s.writeSubscribe(conn, symbol)
+	}
 	log.Printf("Finnhub: subscribed to %s", symbol)
 }
 
 func (s *Stream) Unsubscribe(symbol string) {
 	s.mu.Lock()
 	delete(s.subs, symbol)
-	s.mu.Unlock()
-
-	s.sendUnsubscribe(symbol)
-	log.Printf("Finnhub: unsubscribed from %s", symbol)
-}
-
-func (s *Stream) sendSubscribe(symbol string) {
-	msg, _ := json.Marshal(map[string]string{
-		"type":   "subscribe",
-		"symbol": symbol,
-	})
-	s.conn.WriteMessage(websocket.TextMessage, msg)
-}
-
-func (s *Stream) sendUnsubscribe(symbol string) {
-	s.mu.Lock()
 	conn := s.conn
 	s.mu.Unlock()
-	if conn == nil {
-		return
+
+	if conn != nil {
+		msg, _ := json.Marshal(map[string]string{
+			"type":   "unsubscribe",
+			"symbol": symbol,
+		})
+		conn.WriteMessage(websocket.TextMessage, msg)
 	}
-	msg, _ := json.Marshal(map[string]string{
-		"type":   "unsubscribe",
-		"symbol": symbol,
-	})
-	conn.WriteMessage(websocket.TextMessage, msg)
+	log.Printf("Finnhub: unsubscribed from %s", symbol)
 }

@@ -59,7 +59,7 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
   const loadedKeyRef = useRef("");    // "SYMBOL:TIMEFRAME" of loaded data
   const loadedCountRef = useRef(0);   // number of bars loaded on chart
 
-  const { currentSymbol, bars, latestQuote } = useMarketStore();
+  const { currentSymbol, bars, latestQuote, isStale } = useMarketStore();
   const { defaultTimeframe, setDefaultTimeframe } = useSettingsStore();
   const timeframe = defaultTimeframe;
   const setTimeframe = setDefaultTimeframe;
@@ -353,6 +353,20 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
               ? bars[bars.length - 1].close.toFixed(2)
               : "—"}
         </span>
+        {isStale && (
+          <span style={{
+            background: "#ef4444",
+            color: "#fff",
+            fontSize: "0.65rem",
+            fontWeight: 700,
+            padding: "2px 6px",
+            borderRadius: "3px",
+            marginLeft: "8px",
+            letterSpacing: "0.05em",
+          }}>
+            STALE
+          </span>
+        )}
         <div className="timeframe-buttons">
           {TIMEFRAMES.map((tf) => (
             <button

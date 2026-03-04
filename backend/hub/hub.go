@@ -46,8 +46,18 @@ func (h *Hub) Run() {
 				select {
 				case client.send <- message:
 				default:
-					close(client.send)
-					delete(h.clients, client)
+					// Buffer full — drain oldest message, then push new one
+					select {
+					case <-client.send:
+					default:
+					}
+					select {
+					case client.send <- message:
+					default:
+						// Still can't send — close as last resort
+						close(client.send)
+						delete(h.clients, client)
+					}
 				}
 			}
 			h.mu.RUnlock()

@@ -7,11 +7,13 @@ interface MarketState {
   bars: Bar[];
   latestQuote: StockQuote | null;
   optionQuotes: Record<string, OptionQuote>;
+  isStale: boolean;
   setSymbol: (symbol: string) => void;
   setBars: (bars: Bar[]) => void;
   addBar: (bar: Bar) => void;
   setLatestQuote: (quote: StockQuote) => void;
   setOptionQuote: (quote: OptionQuote) => void;
+  setStale: (stale: boolean) => void;
 }
 
 export const useMarketStore = create<MarketState>((set) => ({
@@ -19,6 +21,7 @@ export const useMarketStore = create<MarketState>((set) => ({
   bars: [],
   latestQuote: null,
   optionQuotes: {},
+  isStale: false,
 
   setSymbol: (symbol) => {
     useSettingsStore.getState().setCurrentSymbol(symbol);
@@ -42,4 +45,6 @@ export const useMarketStore = create<MarketState>((set) => ({
     set((state) => ({
       optionQuotes: { ...state.optionQuotes, [quote.symbol]: quote },
     })),
+
+  setStale: (stale) => set({ isStale: stale }),
 }));

@@ -10,12 +10,30 @@ import type { WSMessage, TradeUpdate, Position, Account, Order, SmartOrderReques
 import { normalizeBar, normalizeStockQuote, normalizeOptionQuote } from "../utils/normalize";
 
 const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8080/ws";
+const STALE_THRESHOLD_MS = 10_000;
+const MAX_RECONNECT_DELAY_MS = 30_000;
+
+function isMarketHours(): boolean {
+  const now = new Date();
+  const day = now.getUTCDay();
+  // Weekend
+  if (day === 0 || day === 6) return false;
+  // Convert to ET (UTC-5 standard, UTC-4 DST) — approximate with UTC-4
+  const etHour = (now.getUTCHours() - 4 + 24) % 24;
+  const etMin = now.getUTCMinutes();
+  const etTime = etHour * 60 + etMin;
+  // Pre-market 4:00 ET to after-hours 20:00 ET
+  return etTime >= 240 && etTime <= 1200;
+}
 
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const reconnectAttempt = useRef(0);
   const currentSymbolRef = useRef(useMarketStore.getState().currentSymbol);
   const positionSymsRef = useRef<Set<string>>(new Set());
+  const lastQuoteTimeRef = useRef(0);
+  const staleCheckTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   // Keep symbol ref in sync
   useEffect(() => {
@@ -32,6 +50,10 @@ export function useWebSocket() {
 
     ws.onopen = () => {
       console.log("WS connected");
+      reconnectAttempt.current = 0;
+      lastQuoteTimeRef.current = Date.now();
+      useMarketStore.getState().setStale(false);
+
       const sym = currentSymbolRef.current;
       if (sym) {
         ws.send(JSON.stringify({ type: "subscribe", symbols: [sym], channel: "bars" }));
@@ -95,17 +117,23 @@ export function useWebSocket() {
           }
           case "stock_quote": {
             const sq = normalizeStockQuote(msg.payload);
-            // Only update if quote matches the current symbol
             if (sq.symbol === useMarketStore.getState().currentSymbol) {
               useMarketStore.getState().setLatestQuote(sq);
+              lastQuoteTimeRef.current = Date.now();
+              if (useMarketStore.getState().isStale) {
+                useMarketStore.getState().setStale(false);
+              }
             }
             break;
           }
           case "option_quote": {
             const oq: OptionQuote = normalizeOptionQuote(msg.payload);
             useMarketStore.getState().setOptionQuote(oq);
-            // Update position P&L live from option quote mid-price
             usePositionStore.getState().updatePositionPrice(oq.symbol, oq);
+            lastQuoteTimeRef.current = Date.now();
+            if (useMarketStore.getState().isStale) {
+              useMarketStore.getState().setStale(false);
+            }
             break;
           }
           case "trade_update": {
@@ -161,6 +189,7 @@ export function useWebSocket() {
             break;
           }
           case "heartbeat":
+            lastQuoteTimeRef.current = Date.now();
             break;
           default:
             break;
@@ -171,8 +200,10 @@ export function useWebSocket() {
     };
 
     ws.onclose = () => {
-      console.log("WS disconnected, reconnecting in 3s...");
-      reconnectTimer.current = setTimeout(connect, 3000);
+      const attempt = ++reconnectAttempt.current;
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), MAX_RECONNECT_DELAY_MS);
+      console.log(`WS disconnected, reconnecting in ${delay}ms (attempt ${attempt})...`);
+      reconnectTimer.current = setTimeout(connect, delay);
     };
 
     ws.onerror = (err) => {
@@ -183,11 +214,26 @@ export function useWebSocket() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Connect once on mount
+  // Connect once on mount + stale-data checker
   useEffect(() => {
     connect();
+
+    staleCheckTimer.current = setInterval(() => {
+      if (!isMarketHours()) return;
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+
+      const elapsed = Date.now() - lastQuoteTimeRef.current;
+      if (elapsed > STALE_THRESHOLD_MS && !useMarketStore.getState().isStale) {
+        useMarketStore.getState().setStale(true);
+        showToast("Stale data — reconnecting stream", "error");
+        // Force reconnect
+        wsRef.current?.close();
+      }
+    }, 5000);
+
     return () => {
       clearTimeout(reconnectTimer.current);
+      clearInterval(staleCheckTimer.current);
       wsRef.current?.close();
     };
   }, [connect]);

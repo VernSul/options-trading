@@ -42,9 +42,10 @@ export function SettingsPanel() {
               type="number"
               className="input"
               value={settings.defaultExpDays}
-              onChange={(e) =>
-                settings.setDefaultExpDays(parseInt(e.target.value) || 1)
-              }
+              onChange={(e) => {
+                const v = parseInt(e.target.value);
+                settings.setDefaultExpDays(isNaN(v) ? 0 : v);
+              }}
               min={0}
             />
           </label>

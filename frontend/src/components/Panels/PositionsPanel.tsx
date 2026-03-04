@@ -74,7 +74,7 @@ export function PositionsPanel() {
               const plClass = pl >= 0 ? "positive" : "negative";
               return (
                 <tr key={pos.symbol}>
-                  <td className="symbol">{pos.symbol}</td>
+                  <td className="symbol" title={pos.symbol}>{pos.symbol}</td>
                   <td>{formatQty(pos.qty)}</td>
                   <td>{formatPrice(pos.avg_entry_price)}</td>
                   <td>{formatPrice(pos.current_price)}</td>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   createChart,
   CandlestickSeries,
@@ -54,10 +54,12 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
   const shouldFitRef = useRef(true);
   const pnlLinesRef = useRef<IPriceLine[]>([]);
   const riskLinesRef = useRef<IPriceLine[]>([]);
+  const liveCandleRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
 
   const { currentSymbol, bars, setBars, latestQuote } = useMarketStore();
-  const { defaultTimeframe } = useSettingsStore();
-  const [timeframe, setTimeframe] = useState<Timeframe>(defaultTimeframe);
+  const { defaultTimeframe, setDefaultTimeframe } = useSettingsStore();
+  const timeframe = defaultTimeframe;
+  const setTimeframe = setDefaultTimeframe;
 
   // Create chart
   useEffect(() => {
@@ -81,7 +83,10 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
         timeVisible: true,
         secondsVisible: false,
       },
-      rightPriceScale: { borderColor: "#2a2a4a" },
+      rightPriceScale: {
+        borderColor: "#2a2a4a",
+        autoScale: true,
+      },
     });
 
     const series = chart.addSeries(CandlestickSeries, {
@@ -113,25 +118,79 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
   useEffect(() => {
     if (!currentSymbol) return;
     shouldFitRef.current = true;
+    liveCandleRef.current = null;
     rest.getBars(currentSymbol, timeframe).then((data) => {
       if (data) setBars(normalizeBars(data));
     });
   }, [currentSymbol, timeframe, setBars]);
 
-  // Live price update from quotes (update last candle's close)
+  // Live price update from quotes — build candles from trade stream
+  const { addBar } = useMarketStore();
   useEffect(() => {
     if (!seriesRef.current || !latestQuote || bars.length === 0) return;
     const mid = (latestQuote.bidPrice + latestQuote.askPrice) / 2;
     if (mid <= 0) return;
-    const lastBar = bars[bars.length - 1];
-    seriesRef.current.update({
-      time: (new Date(lastBar.timestamp).getTime() / 1000) as Time,
-      open: lastBar.open,
-      high: Math.max(lastBar.high, mid),
-      low: Math.min(lastBar.low, mid),
-      close: mid,
-    });
-  }, [latestQuote, bars]);
+
+    const quoteTime = new Date(latestQuote.timestamp).getTime();
+    if (isNaN(quoteTime)) return;
+
+    // Timeframe duration in ms
+    const tfMs: Record<string, number> = {
+      "1Min": 60_000, "5Min": 300_000, "15Min": 900_000,
+      "1H": 3_600_000, "1D": 86_400_000,
+    };
+    const bucketMs = tfMs[timeframe] || 60_000;
+    const bucketStart = Math.floor(quoteTime / bucketMs) * bucketMs;
+    const bucketISO = new Date(bucketStart).toISOString();
+
+    const lc = liveCandleRef.current;
+
+    if (lc && bucketStart > lc.time) {
+      // New candle period — commit previous live candle to bars, start fresh
+      liveCandleRef.current = { time: bucketStart, open: mid, high: mid, low: mid, close: mid };
+      addBar({
+        symbol: currentSymbol,
+        timestamp: bucketISO,
+        open: mid, high: mid, low: mid, close: mid,
+        volume: 0, tradeCount: 0, vwap: 0,
+      });
+    } else if (lc && bucketStart === lc.time) {
+      // Same candle period — update OHLC
+      lc.high = Math.max(lc.high, mid);
+      lc.low = Math.min(lc.low, mid);
+      lc.close = mid;
+      // Update chart directly (addBar would cause re-render loop)
+      seriesRef.current.update({
+        time: (bucketStart / 1000) as Time,
+        open: lc.open, high: lc.high, low: lc.low, close: mid,
+      });
+    } else {
+      // No live candle yet — determine if we need a new one or update last bar
+      const lastBar = bars[bars.length - 1];
+      const lastBarBucket = Math.floor(new Date(lastBar.timestamp).getTime() / bucketMs) * bucketMs;
+
+      if (bucketStart > lastBarBucket) {
+        // New period beyond last historical bar
+        liveCandleRef.current = { time: bucketStart, open: mid, high: mid, low: mid, close: mid };
+        addBar({
+          symbol: currentSymbol,
+          timestamp: bucketISO,
+          open: mid, high: mid, low: mid, close: mid,
+          volume: 0, tradeCount: 0, vwap: 0,
+        });
+      } else {
+        // Same period as last bar — update it visually
+        seriesRef.current.update({
+          time: (lastBarBucket / 1000) as Time,
+          open: lastBar.open,
+          high: Math.max(lastBar.high, mid),
+          low: Math.min(lastBar.low, mid),
+          close: mid,
+        });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestQuote]);
 
   // Track previous bars length to distinguish full load from live updates
   const prevBarsLenRef = useRef(0);

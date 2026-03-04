@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Bar, StockQuote, OptionQuote } from "../types";
+import { useSettingsStore } from "./useSettingsStore";
 
 interface MarketState {
   currentSymbol: string;
@@ -14,12 +15,15 @@ interface MarketState {
 }
 
 export const useMarketStore = create<MarketState>((set) => ({
-  currentSymbol: "SPY",
+  currentSymbol: useSettingsStore.getState().currentSymbol || "SPY",
   bars: [],
   latestQuote: null,
   optionQuotes: {},
 
-  setSymbol: (symbol) => set({ currentSymbol: symbol, bars: [], latestQuote: null }),
+  setSymbol: (symbol) => {
+    useSettingsStore.getState().setCurrentSymbol(symbol);
+    set({ currentSymbol: symbol, bars: [], latestQuote: null });
+  },
 
   setBars: (bars) => set({ bars }),
 

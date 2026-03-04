@@ -116,10 +116,15 @@ export function OptionsChain({ onSelectContract, onAutoSelect, onChainReady }: P
     }
   }, [chain, spotPrice, selectedExpiration, handleAutoSelect, onChainReady]);
 
-  // Auto-scroll to ATM row once after chain loads for a new symbol
+  // Auto-scroll to ATM row within the chain table wrapper (not the page)
   useEffect(() => {
     if (!hasScrolledRef.current && atmRowRef.current && Object.keys(chain).length > 0) {
-      atmRowRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+      const wrapper = atmRowRef.current.closest(".chain-table-wrapper");
+      if (wrapper) {
+        const rowTop = atmRowRef.current.offsetTop;
+        const rowHeight = atmRowRef.current.offsetHeight;
+        wrapper.scrollTop = rowTop - wrapper.clientHeight / 2 + rowHeight / 2;
+      }
       hasScrolledRef.current = true;
     }
   }, [chain]);

@@ -8,7 +8,7 @@ import { OrdersPanel } from "./components/Panels/OrdersPanel";
 import { AccountPanel } from "./components/Panels/AccountPanel";
 import { CrossingAlertForm } from "./components/CrossingAlerts/CrossingAlertForm";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
-import { PnLProjection } from "./components/PnLProjection/PnLProjection";
+// PnLProjection box removed — projection lines on chart are sufficient
 import { KeyboardHelp } from "./components/KeyboardHelp/KeyboardHelp";
 import { StatusBar } from "./components/common/StatusBar";
 import { ToastContainer } from "./components/common/Toast";
@@ -56,7 +56,7 @@ function App() {
   }, [fetchAlerts]);
 
   const { latestQuote, bars } = useMarketStore();
-  const { dollarAmount, stopLossPercent, trailingStartPercent } = settings;
+  const { dollarAmount, stopLossPercent, trailingStartPercent, showProjections } = settings;
 
   // Spot price for PnL projection
   const spotPrice = latestQuote
@@ -152,9 +152,9 @@ function App() {
       ? Math.floor(dollarAmount / (autoOption.askPrice * 100))
       : 0;
 
-  // P&L projection lines for chart
+  // P&L projection lines for chart (optional via settings)
   const pnlProjections = useMemo(() => {
-    if (!autoOption || spotPrice <= 0 || pnlQty <= 0) return undefined;
+    if (!showProjections || !autoOption || spotPrice <= 0 || pnlQty <= 0) return undefined;
     const { delta, gamma } = autoOption;
     const moves = [-5, -3, -2, -1, 1, 2, 3, 5];
     return moves.map((move) => {
@@ -169,11 +169,11 @@ function App() {
         plPercent,
       };
     });
-  }, [autoOption, spotPrice, pnlQty]);
+  }, [showProjections, autoOption, spotPrice, pnlQty]);
 
   // Stop-loss & trailing start underlying prices for chart
   const stopLossUnderlying = useMemo(() => {
-    if (!autoOption || spotPrice <= 0 || !autoOption.delta || stopLossPercent <= 0) return undefined;
+    if (!showProjections || !autoOption || spotPrice <= 0 || !autoOption.delta || stopLossPercent <= 0) return undefined;
     const entryPrice = autoOption.askPrice;
     const optionStopLoss = entryPrice * (1 - stopLossPercent);
     const optionDrop = entryPrice - optionStopLoss;
@@ -182,17 +182,17 @@ function App() {
     return autoOption.type === "C"
       ? spotPrice - underlyingMove
       : spotPrice + underlyingMove;
-  }, [autoOption, spotPrice, stopLossPercent]);
+  }, [showProjections, autoOption, spotPrice, stopLossPercent]);
 
   const trailStartUnderlying = useMemo(() => {
-    if (!autoOption || spotPrice <= 0 || !autoOption.delta || trailingStartPercent <= 0) return undefined;
+    if (!showProjections || !autoOption || spotPrice <= 0 || !autoOption.delta || trailingStartPercent <= 0) return undefined;
     const entryPrice = autoOption.askPrice;
     const trailStartMove = (entryPrice * trailingStartPercent) / Math.abs(autoOption.delta);
     // For calls, trail start is above spot; for puts, below spot
     return autoOption.type === "C"
       ? spotPrice + trailStartMove
       : spotPrice - trailStartMove;
-  }, [autoOption, spotPrice, trailingStartPercent]);
+  }, [showProjections, autoOption, spotPrice, trailingStartPercent]);
 
   return (
     <div className="app">
@@ -213,17 +213,6 @@ function App() {
             onAutoSelect={handleAutoSelect}
             onChainReady={handleChainReady}
           />
-          {autoOption && spotPrice > 0 && pnlQty > 0 && (
-            <PnLProjection
-              delta={autoOption.delta}
-              gamma={autoOption.gamma}
-              theta={autoOption.theta}
-              qty={pnlQty}
-              entryPrice={autoOption.askPrice}
-              spotPrice={spotPrice}
-              optionType={autoOption.type}
-            />
-          )}
           <CrossingAlertForm />
         </div>
 

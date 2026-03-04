@@ -16,6 +16,8 @@ interface SettingsState {
   trailingOffsetPercent: number;
   defaultTimeframe: Timeframe;
   chainStrikesRange: number;
+  showProjections: boolean;
+  currentSymbol: string;
 
   setDefaultExpDays: (v: number) => void;
   setStrikeOffset: (v: number) => void;
@@ -27,6 +29,8 @@ interface SettingsState {
   setTrailingOffsetPercent: (v: number) => void;
   setDefaultTimeframe: (v: Timeframe) => void;
   setChainStrikesRange: (v: number) => void;
+  setShowProjections: (v: boolean) => void;
+  setCurrentSymbol: (v: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -42,6 +46,8 @@ export const useSettingsStore = create<SettingsState>()(
       trailingOffsetPercent: 0.05,
       defaultTimeframe: "5Min",
       chainStrikesRange: 10,
+      showProjections: true,
+      currentSymbol: "SPY",
 
       setDefaultExpDays: (v) => set({ defaultExpDays: v }),
       setStrikeOffset: (v) => set({ strikeOffset: v }),
@@ -53,6 +59,8 @@ export const useSettingsStore = create<SettingsState>()(
       setTrailingOffsetPercent: (v) => set({ trailingOffsetPercent: v }),
       setDefaultTimeframe: (v) => set({ defaultTimeframe: v }),
       setChainStrikesRange: (v) => set({ chainStrikesRange: v }),
+      setShowProjections: (v) => set({ showProjections: v }),
+      setCurrentSymbol: (v) => set({ currentSymbol: v }),
     }),
     { name: "trading-settings" }
   )

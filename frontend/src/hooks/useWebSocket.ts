@@ -6,7 +6,7 @@ import { useAccountStore } from "../stores/useAccountStore";
 import { useCrossingStore } from "../stores/useCrossingStore";
 import { useWSStore } from "../stores/useWSStore";
 import { showToast } from "../components/common/Toast";
-import type { WSMessage, TradeUpdate, Position, Account, Order, SmartOrderRequest } from "../types";
+import type { WSMessage, TradeUpdate, Position, Account, Order, SmartOrderRequest, OptionQuote } from "../types";
 import { normalizeBar, normalizeStockQuote, normalizeOptionQuote } from "../utils/normalize";
 
 const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8080/ws";
@@ -15,6 +15,7 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const currentSymbolRef = useRef(useMarketStore.getState().currentSymbol);
+  const positionSymsRef = useRef<Set<string>>(new Set());
 
   // Keep symbol ref in sync
   useEffect(() => {
@@ -36,6 +37,13 @@ export function useWebSocket() {
         ws.send(JSON.stringify({ type: "subscribe", symbols: [sym], channel: "bars" }));
         ws.send(JSON.stringify({ type: "subscribe", symbols: [sym], channel: "quotes" }));
       }
+
+      // Subscribe to option quotes for existing positions
+      const posSyms = usePositionStore.getState().positions.map((p) => p.symbol);
+      for (const psym of posSyms) {
+        ws.send(JSON.stringify({ type: "subscribe", symbols: [psym], channel: "option_quotes" }));
+      }
+      positionSymsRef.current = new Set(posSyms);
 
       // Populate WS action store
       useWSStore.getState().setActions({
@@ -84,9 +92,13 @@ export function useWebSocket() {
           case "stock_quote":
             useMarketStore.getState().setLatestQuote(normalizeStockQuote(msg.payload));
             break;
-          case "option_quote":
-            useMarketStore.getState().setOptionQuote(normalizeOptionQuote(msg.payload));
+          case "option_quote": {
+            const oq: OptionQuote = normalizeOptionQuote(msg.payload);
+            useMarketStore.getState().setOptionQuote(oq);
+            // Update position P&L live from option quote mid-price
+            usePositionStore.getState().updatePositionPrice(oq.symbol, oq);
             break;
+          }
           case "trade_update": {
             const tu = msg.payload as TradeUpdate;
             useOrderStore.getState().updateOrder(tu.order);
@@ -166,6 +178,30 @@ export function useWebSocket() {
         ws.send(JSON.stringify({ type: "subscribe", symbols: [state.currentSymbol], channel: "bars" }));
         ws.send(JSON.stringify({ type: "subscribe", symbols: [state.currentSymbol], channel: "quotes" }));
       }
+    });
+  }, []);
+
+  // Auto-subscribe to option quotes for open positions
+  useEffect(() => {
+    return usePositionStore.subscribe((state) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+      const newSyms = new Set(state.positions.map((p) => p.symbol));
+
+      // Unsubscribe symbols no longer in positions
+      for (const sym of positionSymsRef.current) {
+        if (!newSyms.has(sym)) {
+          ws.send(JSON.stringify({ type: "unsubscribe", symbols: [sym], channel: "option_quotes" }));
+        }
+      }
+      // Subscribe new position symbols
+      for (const sym of newSyms) {
+        if (!positionSymsRef.current.has(sym)) {
+          ws.send(JSON.stringify({ type: "subscribe", symbols: [sym], channel: "option_quotes" }));
+        }
+      }
+      positionSymsRef.current = newSyms;
     });
   }, []);
 

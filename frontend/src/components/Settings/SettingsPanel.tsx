@@ -172,6 +172,20 @@ export function SettingsPanel() {
               max={30}
             />
           </label>
+
+          <label className="setting-item">
+            <span>Projections</span>
+            <select
+              className="select"
+              value={settings.showProjections ? "on" : "off"}
+              onChange={(e) =>
+                settings.setShowProjections(e.target.value === "on")
+              }
+            >
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
         </div>
       )}
     </div>

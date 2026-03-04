@@ -49,6 +49,8 @@ function buildOrder(option: AutoOption): SmartOrderRequest | null {
       safetyStop: (
         entryPrice * (1 - settings.trailingStartPercent - settings.trailingOffsetPercent)
       ).toFixed(2),
+      startPercent: settings.trailingStartPercent.toString(),
+      offsetPercent: settings.trailingOffsetPercent.toString(),
     };
   }
 

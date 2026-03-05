@@ -6,6 +6,7 @@ import { OrderEntry } from "./components/OrderEntry/OrderEntry";
 import { PositionsPanel } from "./components/Panels/PositionsPanel";
 import { OrdersPanel } from "./components/Panels/OrdersPanel";
 import { TradesPanel } from "./components/Panels/TradesPanel";
+import { StopsPanel } from "./components/Panels/StopsPanel";
 import { AccountPanel } from "./components/Panels/AccountPanel";
 import { CrossingAlertForm } from "./components/CrossingAlerts/CrossingAlertForm";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
@@ -227,6 +228,7 @@ function App() {
             autoAskPrice={autoOption?.askPrice}
           />
           <PositionsPanel />
+          <StopsPanel />
           <OrdersPanel />
           <TradesPanel />
         </div>

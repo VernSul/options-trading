@@ -152,6 +152,17 @@ func (tse *TrailingStopEngine) Remove(orderID string) {
 	delete(tse.stops, orderID)
 }
 
+// GetAll returns all currently tracked stops (active, inactive, and standalone stop-losses).
+func (tse *TrailingStopEngine) GetAll() []*TrailingStop {
+	tse.mu.Lock()
+	defer tse.mu.Unlock()
+	var result []*TrailingStop
+	for _, ts := range tse.stops {
+		result = append(result, ts)
+	}
+	return result
+}
+
 // GetExitReason returns the exit reason for a close order ID (trailing, stop_loss, or empty for manual).
 func (tse *TrailingStopEngine) GetExitReason(closeOrderID string) string {
 	tse.mu.Lock()

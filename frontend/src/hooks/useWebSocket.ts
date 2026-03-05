@@ -4,6 +4,7 @@ import { useOrderStore } from "../stores/useOrderStore";
 import { usePositionStore } from "../stores/usePositionStore";
 import { useAccountStore } from "../stores/useAccountStore";
 import { useCrossingStore } from "../stores/useCrossingStore";
+import { useStopStore } from "../stores/useStopStore";
 import { useWSStore } from "../stores/useWSStore";
 import { showToast } from "../components/common/Toast";
 import type { WSMessage, TradeUpdate, Position, Account, Order, SmartOrderRequest, OptionQuote, TrailingStopUpdate } from "../types";
@@ -173,6 +174,7 @@ export function useWebSocket() {
           }
           case "trailing_stop_update": {
             const ts = msg.payload as TrailingStopUpdate;
+            useStopStore.getState().upsertStop(ts);
             if (ts.active) {
               showToast(`Trailing active: ${ts.symbol} HW=$${ts.highWater}`, "success");
             }
@@ -180,6 +182,7 @@ export function useWebSocket() {
           }
           case "trailing_stop_fired": {
             const ts = msg.payload as TrailingStopUpdate;
+            useStopStore.getState().removeStop(ts.orderId);
             showToast(`Trailing fired — closing ${ts.symbol}`, "info");
             break;
           }

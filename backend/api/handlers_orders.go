@@ -62,6 +62,14 @@ func (s *Server) HandleCancelAllOrders(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) HandleGetStops(w http.ResponseWriter, r *http.Request) {
+	stops := s.TrailingEngine.GetAll()
+	if stops == nil {
+		stops = []*orders.TrailingStop{}
+	}
+	json.NewEncoder(w).Encode(stops)
+}
+
 func alpacaClosePositionRequest(qty *string) alpaca.ClosePositionRequest {
 	if qty != nil {
 		q, _ := decimal.NewFromString(*qty)

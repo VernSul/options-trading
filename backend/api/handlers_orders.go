@@ -70,10 +70,36 @@ func (s *Server) HandleGetStops(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stops)
 }
 
-func alpacaClosePositionRequest(qty *string) alpaca.ClosePositionRequest {
-	if qty != nil {
-		q, _ := decimal.NewFromString(*qty)
-		return alpaca.ClosePositionRequest{Qty: q}
+// closePosition closes a position. For option symbols (OCC format, len >= 15),
+// it places a market sell-to-close order instead of using ClosePosition,
+// which Alpaca rejects for accounts not approved for uncovered options.
+func closePosition(trading *alpaca.Client, symbol string, qty *decimal.Decimal) (*alpaca.Order, error) {
+	if len(symbol) >= 15 {
+		// Option symbol — use PlaceOrder with sell-to-close
+		req := alpaca.PlaceOrderRequest{
+			Symbol:         symbol,
+			Side:           alpaca.Sell,
+			Type:           alpaca.Market,
+			TimeInForce:    alpaca.Day,
+			PositionIntent: alpaca.SellToClose,
+		}
+		if qty != nil && !qty.IsZero() {
+			req.Qty = qty
+		} else {
+			// Need qty — look up position
+			pos, err := trading.GetPosition(symbol)
+			if err != nil {
+				return nil, err
+			}
+			q := pos.Qty
+			req.Qty = &q
+		}
+		return trading.PlaceOrder(req)
 	}
-	return alpaca.ClosePositionRequest{}
+	// Stock — ClosePosition works fine
+	closeReq := alpaca.ClosePositionRequest{}
+	if qty != nil {
+		closeReq.Qty = *qty
+	}
+	return trading.ClosePosition(symbol, closeReq)
 }

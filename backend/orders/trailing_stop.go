@@ -121,8 +121,13 @@ func (tse *TrailingStopEngine) UpdatePrice(symbol string, midPrice decimal.Decim
 
 func (tse *TrailingStopEngine) fireClose(ts *TrailingStop) {
 	qty := decimal.NewFromInt(int64(ts.Qty))
-	order, err := tse.trading.ClosePosition(ts.Symbol, alpaca.ClosePositionRequest{
-		Qty: qty,
+	order, err := tse.trading.PlaceOrder(alpaca.PlaceOrderRequest{
+		Symbol:         ts.Symbol,
+		Qty:            &qty,
+		Side:           alpaca.Sell,
+		Type:           alpaca.Market,
+		TimeInForce:    alpaca.Day,
+		PositionIntent: alpaca.SellToClose,
 	})
 	if err != nil {
 		log.Printf("Trailing stop close failed: %v", err)

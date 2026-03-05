@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/shopspring/decimal"
 )
 
 func (s *Server) HandleGetPositions(w http.ResponseWriter, r *http.Request) {
@@ -26,8 +27,12 @@ func (s *Server) HandleClosePosition(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&req)
 	}
 
-	// ClosePositionRequest needs percentage or qty
-	order, err := s.Alpaca.Trading.ClosePosition(symbol, alpacaClosePositionRequest(req.Qty))
+	var qty *decimal.Decimal
+	if req.Qty != nil {
+		q, _ := decimal.NewFromString(*req.Qty)
+		qty = &q
+	}
+	order, err := closePosition(s.Alpaca.Trading, symbol, qty)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

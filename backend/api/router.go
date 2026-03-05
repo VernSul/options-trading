@@ -18,7 +18,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/shopspring/decimal"
 
-	"github.com/alpacahq/alpaca-trade-api-go/v3/alpaca"
 	"github.com/alpacahq/alpaca-trade-api-go/v3/marketdata"
 )
 
@@ -222,13 +221,13 @@ func (s *Server) handleWSClosePosition(payload json.RawMessage) {
 		return
 	}
 
-	closeReq := alpaca.ClosePositionRequest{}
+	var qty *decimal.Decimal
 	if req.Qty != nil {
 		q, _ := decimal.NewFromString(*req.Qty)
-		closeReq.Qty = q
+		qty = &q
 	}
 
-	order, err := s.Alpaca.Trading.ClosePosition(req.Symbol, closeReq)
+	order, err := closePosition(s.Alpaca.Trading, req.Symbol, qty)
 	if err != nil {
 		log.Printf("WS close_position failed: %v", err)
 		s.Hub.BroadcastMessage(hub.MsgOrderError, map[string]string{
@@ -253,7 +252,7 @@ func (s *Server) handleWSCloseAllPositions() {
 	}
 
 	for _, pos := range positions {
-		_, err := s.Alpaca.Trading.ClosePosition(pos.Symbol, alpaca.ClosePositionRequest{})
+		_, err := closePosition(s.Alpaca.Trading, pos.Symbol, nil)
 		if err != nil {
 			log.Printf("WS close position %s failed: %v", pos.Symbol, err)
 		}

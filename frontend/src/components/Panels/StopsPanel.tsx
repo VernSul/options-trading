@@ -28,6 +28,7 @@ export function StopsPanel() {
       <div className="panel-header">
         <h3>Stop Monitor</h3>
       </div>
+      <div className="panel-table-wrap">
       <table className="panel-table">
         <thead>
           <tr>
@@ -82,6 +83,7 @@ export function StopsPanel() {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

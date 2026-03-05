@@ -49,6 +49,7 @@ export function OrdersPanel() {
       {orders.length === 0 ? (
         <div className="empty">No open orders</div>
       ) : (
+        <div className="panel-table-wrap">
         <table className="panel-table">
           <thead>
             <tr>
@@ -100,6 +101,7 @@ export function OrdersPanel() {
             })}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

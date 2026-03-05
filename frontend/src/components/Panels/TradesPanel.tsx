@@ -75,6 +75,7 @@ export function TradesPanel() {
       {trades.length === 0 ? (
         <div className="empty">No trades</div>
       ) : (
+        <div className="panel-table-wrap">
         <table className="panel-table trades-table">
           <thead>
             <tr>
@@ -116,6 +117,7 @@ export function TradesPanel() {
             })}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

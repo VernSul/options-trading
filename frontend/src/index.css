@@ -200,6 +200,10 @@ body {
   color: var(--text-secondary);
   font-weight: 500;
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  z-index: 1;
 }
 
 .panel-table td {
@@ -212,11 +216,26 @@ body {
   background: rgba(99, 102, 241, 0.05);
 }
 
-/* Scrollable table panels */
+/* Resizable table panels */
 .positions-panel,
 .orders-panel,
-.trades-panel {
-  overflow-x: auto;
+.trades-panel,
+.stops-panel {
+  resize: vertical;
+  overflow: hidden;
+  min-height: 60px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.positions-panel .panel-table-wrap,
+.orders-panel .panel-table-wrap,
+.trades-panel .panel-table-wrap,
+.stops-panel .panel-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 /* Inline P&L percent */

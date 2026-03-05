@@ -56,6 +56,7 @@ export function PositionsPanel() {
       {positions.length === 0 ? (
         <div className="empty">No open positions</div>
       ) : (
+        <div className="panel-table-wrap">
         <table className="panel-table">
           <thead>
             <tr>
@@ -101,6 +102,7 @@ export function PositionsPanel() {
             })}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

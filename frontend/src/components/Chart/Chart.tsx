@@ -227,6 +227,10 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
 
     const lc = liveCandleRef.current;
 
+    // Discard quotes older than the current live candle (can happen with
+    // multiple data sources like Tiingo + Finnhub sending slightly delayed data)
+    if (lc && bucketStart < lc.time) return;
+
     if (lc && bucketStart > lc.time) {
       // New candle period — start fresh
       liveCandleRef.current = { time: bucketStart, open: mid, high: mid, low: mid, close: mid };

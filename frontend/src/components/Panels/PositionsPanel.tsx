@@ -4,6 +4,7 @@ import { useOrderStore } from "../../stores/useOrderStore";
 import { useAccountStore } from "../../stores/useAccountStore";
 import { useWSStore } from "../../stores/useWSStore";
 import { formatPrice, formatPL, formatPercent, formatQty } from "../../utils/format";
+import { occCompact } from "../../utils/occ";
 import { showToast } from "../common/Toast";
 
 export function PositionsPanel() {
@@ -12,7 +13,6 @@ export function PositionsPanel() {
 
   useEffect(() => {
     fetchPositions();
-    // Periodically refresh positions from Alpaca for authoritative values
     const interval = setInterval(fetchPositions, 30_000);
     return () => clearInterval(interval);
   }, [fetchPositions]);
@@ -59,12 +59,11 @@ export function PositionsPanel() {
         <table className="panel-table">
           <thead>
             <tr>
-              <th>Symbol</th>
+              <th>Option</th>
               <th>Qty</th>
-              <th>Avg Entry</th>
-              <th>Current</th>
+              <th>Entry</th>
+              <th>Now</th>
               <th>P&L</th>
-              <th>P&L %</th>
               <th></th>
             </tr>
           </thead>
@@ -72,15 +71,22 @@ export function PositionsPanel() {
             {positions.map((pos) => {
               const pl = parseFloat(pos.unrealized_pl || "0");
               const plClass = pl >= 0 ? "positive" : "negative";
+              const occ = occCompact(pos.symbol);
               return (
                 <tr key={pos.symbol}>
-                  <td className="symbol" title={pos.symbol}>{pos.symbol}</td>
+                  <td title={pos.symbol}>
+                    {occ ? (
+                      <span className={occ.typeClass}>{occ.label}</span>
+                    ) : (
+                      <span className="symbol">{pos.symbol}</span>
+                    )}
+                  </td>
                   <td>{formatQty(pos.qty)}</td>
                   <td>{formatPrice(pos.avg_entry_price)}</td>
                   <td>{formatPrice(pos.current_price)}</td>
-                  <td className={plClass}>{formatPL(pos.unrealized_pl)}</td>
                   <td className={plClass}>
-                    {formatPercent(pos.unrealized_plpc)}
+                    {formatPL(pos.unrealized_pl)}{" "}
+                    <span className="pct">{formatPercent(pos.unrealized_plpc)}</span>
                   </td>
                   <td>
                     <button

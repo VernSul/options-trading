@@ -31,6 +31,7 @@ type Server struct {
 	TiingoStream   *tiingo.Stream
 	OrderManager   *orders.OrderManager
 	CrossingEngine *orders.CrossingEngine
+	TrailingEngine *orders.TrailingStopEngine
 	AllowedOrigins string
 }
 

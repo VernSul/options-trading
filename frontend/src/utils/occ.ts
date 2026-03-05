@@ -37,3 +37,22 @@ export function parseOCC(occ: string): {
 
   return { underlying, expiration, type, strike };
 }
+
+export function occDTE(expiration: string): number {
+  const exp = new Date(expiration + "T00:00:00");
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.ceil((exp.getTime() - now.getTime()) / 86400000));
+}
+
+// Compact label: "C 230 2d" or "P 145.5 0d"
+export function occCompact(symbol: string): { label: string; typeClass: string } | null {
+  const info = parseOCC(symbol);
+  if (!info) return null;
+  const dte = occDTE(info.expiration);
+  const strikeStr = info.strike % 1 === 0 ? String(info.strike) : info.strike.toFixed(1);
+  return {
+    label: `${info.type} ${strikeStr} ${dte}d`,
+    typeClass: info.type === "C" ? "buy-text" : "sell-text",
+  };
+}

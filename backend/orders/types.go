@@ -50,6 +50,7 @@ type TrailingStop struct {
 	SafetyStop    decimal.Decimal `json:"safetyStop"`    // initial stop price protecting against loss before trailing activates
 	Active        bool            `json:"active"`
 	Fired         bool            `json:"fired"`         // true once close is triggered
+	ExitReason    string          `json:"exitReason"`    // trailing, stop_loss, safety (set when fired)
 	EntryPrice    decimal.Decimal `json:"entryPrice"`    // filled price of entry order
 	StartPercent  decimal.Decimal `json:"startPercent"`  // % gain to activate (e.g. 0.02)
 	OffsetPercent decimal.Decimal `json:"offsetPercent"` // % drop from high-water for stop (e.g. 0.01)

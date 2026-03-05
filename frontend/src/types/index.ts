@@ -182,6 +182,7 @@ export interface TradeRecord {
   entryTime: string;
   exitTime: string | null;
   status: "open" | "closed";
+  exitReason: string; // trailing, stop_loss, manual, or empty
   entryOrderId: string;
   exitOrderId: string;
   positionIntent: string;

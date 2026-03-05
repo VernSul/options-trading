@@ -214,8 +214,33 @@ body {
 
 /* Scrollable table panels */
 .positions-panel,
-.orders-panel {
+.orders-panel,
+.trades-panel {
   overflow-x: auto;
+}
+
+/* Inline P&L percent */
+.panel-table .pct {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+/* Exit reason badges */
+.exit-trailing {
+  color: var(--accent);
+}
+
+.exit-stoploss {
+  color: var(--red);
+}
+
+.exit-manual {
+  color: var(--text-secondary);
+}
+
+/* Open trade row */
+.trade-open {
+  opacity: 0.6;
 }
 
 /* Account Panel */

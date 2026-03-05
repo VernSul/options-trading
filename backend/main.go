@@ -202,6 +202,7 @@ func main() {
 		TiingoStream:   tiingoStream,
 		OrderManager:   orderMgr,
 		CrossingEngine: crossingEngine,
+		TrailingEngine: trailingEngine,
 		AllowedOrigins: cfg.AllowedOrigins,
 	}
 

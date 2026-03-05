@@ -10,17 +10,19 @@ import (
 )
 
 type TrailingStopEngine struct {
-	mu       sync.Mutex
-	trading  *alpaca.Client
-	stops    map[string]*TrailingStop // orderID -> trailing stop
-	OnFired  func(ts *TrailingStop)
-	OnUpdate func(ts *TrailingStop)
+	mu          sync.Mutex
+	trading     *alpaca.Client
+	stops       map[string]*TrailingStop // orderID -> trailing stop
+	exitReasons map[string]string        // closeOrderID -> exit reason
+	OnFired     func(ts *TrailingStop)
+	OnUpdate    func(ts *TrailingStop)
 }
 
 func NewTrailingStopEngine(trading *alpaca.Client) *TrailingStopEngine {
 	return &TrailingStopEngine{
-		trading: trading,
-		stops:   make(map[string]*TrailingStop),
+		trading:     trading,
+		stops:       make(map[string]*TrailingStop),
+		exitReasons: make(map[string]string),
 	}
 }
 
@@ -68,6 +70,7 @@ func (tse *TrailingStopEngine) UpdatePrice(symbol string, midPrice decimal.Decim
 					ts.OrderID, ts.Symbol, midPrice, ts.SafetyStop)
 				ts.Fired = true
 				ts.StopPrice = ts.SafetyStop
+				ts.ExitReason = "stop_loss"
 				toClose = ts
 				break
 			}
@@ -103,6 +106,7 @@ func (tse *TrailingStopEngine) UpdatePrice(symbol string, midPrice decimal.Decim
 				ts.OrderID, ts.Symbol, midPrice, ts.StopPrice, ts.HighWater)
 			ts.Fired = true
 			ts.Active = false
+			ts.ExitReason = "trailing"
 			toClose = ts
 			break // only one close at a time
 		}
@@ -130,10 +134,11 @@ func (tse *TrailingStopEngine) fireClose(ts *TrailingStop) {
 		return
 	}
 
-	log.Printf("Trailing stop closed position: order=%s symbol=%s closeOrderId=%s", ts.OrderID, ts.Symbol, order.ID)
+	log.Printf("Trailing stop closed position: order=%s symbol=%s closeOrderId=%s reason=%s", ts.OrderID, ts.Symbol, order.ID, ts.ExitReason)
 
 	tse.mu.Lock()
 	delete(tse.stops, ts.OrderID)
+	tse.exitReasons[order.ID] = ts.ExitReason
 	tse.mu.Unlock()
 
 	if tse.OnFired != nil {
@@ -145,4 +150,11 @@ func (tse *TrailingStopEngine) Remove(orderID string) {
 	tse.mu.Lock()
 	defer tse.mu.Unlock()
 	delete(tse.stops, orderID)
+}
+
+// GetExitReason returns the exit reason for a close order ID (trailing, stop_loss, or empty for manual).
+func (tse *TrailingStopEngine) GetExitReason(closeOrderID string) string {
+	tse.mu.Lock()
+	defer tse.mu.Unlock()
+	return tse.exitReasons[closeOrderID]
 }

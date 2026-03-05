@@ -1,16 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { rest } from "../../api/rest";
+import { occCompact } from "../../utils/occ";
 import type { TradeRecord } from "../../types";
 
 function formatTime(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatPL(val: string | null): string {
@@ -29,10 +25,13 @@ function formatPct(val: string | null): string {
   return `${sign}${n.toFixed(1)}%`;
 }
 
-function intentLabel(intent: string): string {
-  if (intent === "buy_to_open") return "Long";
-  if (intent === "sell_to_open") return "Short";
-  return intent;
+function exitLabel(reason: string): { text: string; cls: string } {
+  switch (reason) {
+    case "trailing": return { text: "Trail", cls: "exit-trailing" };
+    case "stop_loss": return { text: "SL", cls: "exit-stoploss" };
+    case "manual": return { text: "Manual", cls: "exit-manual" };
+    default: return { text: "—", cls: "" };
+  }
 }
 
 export function TradesPanel() {
@@ -79,13 +78,12 @@ export function TradesPanel() {
         <table className="panel-table trades-table">
           <thead>
             <tr>
-              <th>Symbol</th>
-              <th>Dir</th>
+              <th>Option</th>
               <th>Qty</th>
               <th>Entry</th>
               <th>Exit</th>
               <th>P&L</th>
-              <th>%</th>
+              <th>Via</th>
               <th>Time</th>
             </tr>
           </thead>
@@ -93,18 +91,26 @@ export function TradesPanel() {
             {trades.map((t, i) => {
               const pnl = parseFloat(t.pnl || "0");
               const plClass = t.status === "open" ? "" : pnl >= 0 ? "positive" : "negative";
+              const occ = occCompact(t.symbol);
+              const exit = exitLabel(t.exitReason);
               return (
                 <tr key={`${t.entryOrderId}-${i}`} className={t.status === "open" ? "trade-open" : ""}>
-                  <td className="symbol" title={t.symbol}>{t.symbol}</td>
-                  <td>{intentLabel(t.positionIntent)}</td>
+                  <td title={t.symbol}>
+                    {occ ? (
+                      <span className={occ.typeClass}>{occ.label}</span>
+                    ) : (
+                      <span className="symbol">{t.symbol}</span>
+                    )}
+                  </td>
                   <td>{t.qty}</td>
                   <td>${parseFloat(t.entryPrice).toFixed(2)}</td>
                   <td>{t.exitPrice ? `$${parseFloat(t.exitPrice).toFixed(2)}` : "—"}</td>
-                  <td className={plClass}>{formatPL(t.pnl)}</td>
-                  <td className={plClass}>{formatPct(t.pnlPercent)}</td>
-                  <td title={t.entryTime}>
-                    {formatDate(t.entryTime)} {formatTime(t.exitTime || t.entryTime)}
+                  <td className={plClass}>
+                    {formatPL(t.pnl)}{" "}
+                    <span className="pct">{formatPct(t.pnlPercent)}</span>
                   </td>
+                  <td className={exit.cls}>{exit.text}</td>
+                  <td>{formatTime(t.exitTime || t.entryTime)}</td>
                 </tr>
               );
             })}

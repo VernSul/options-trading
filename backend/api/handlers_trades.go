@@ -20,7 +20,8 @@ type Trade struct {
 	PnLPercent     *decimal.Decimal `json:"pnlPercent"`
 	EntryTime      time.Time        `json:"entryTime"`
 	ExitTime       *time.Time       `json:"exitTime"`
-	Status         string           `json:"status"` // open, closed
+	Status         string           `json:"status"`     // open, closed
+	ExitReason     string           `json:"exitReason"` // trailing, stop_loss, manual, or empty
 	EntryOrderID   string           `json:"entryOrderId"`
 	ExitOrderID    string           `json:"exitOrderId,omitempty"`
 	PositionIntent string           `json:"positionIntent"`
@@ -96,6 +97,13 @@ func (s *Server) HandleGetTrades(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
+				exitReason := "manual"
+				if s.TrailingEngine != nil {
+					if reason := s.TrailingEngine.GetExitReason(o.ID); reason != "" {
+						exitReason = reason
+					}
+				}
+
 				trade := Trade{
 					Symbol:         o.Symbol,
 					Side:           string(entry.order.PositionIntent),
@@ -107,6 +115,7 @@ func (s *Server) HandleGetTrades(w http.ResponseWriter, r *http.Request) {
 					EntryTime:      *entry.order.FilledAt,
 					ExitTime:       o.FilledAt,
 					Status:         "closed",
+					ExitReason:     exitReason,
 					EntryOrderID:   entry.order.ID,
 					ExitOrderID:    o.ID,
 					PositionIntent: string(entry.order.PositionIntent),

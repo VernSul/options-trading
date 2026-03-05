@@ -21,20 +21,31 @@ export const useOrderStore = create<OrderState>((set) => ({
     set({ loading: true });
     try {
       const orders = await rest.getOrders();
-      set({ orders, loading: false });
+      const open = orders.filter(
+        (o) => !["filled", "canceled", "expired", "rejected", "replaced",
+          "pending_cancel", "pending_replace"].includes(o.status)
+      );
+      set({ orders: open, loading: false });
     } catch {
       set({ loading: false });
     }
   },
 
   addOrder: (order) =>
-    set((state) => ({ orders: [order, ...state.orders] })),
+    set((state) => {
+      // Avoid duplicates
+      if (state.orders.some((o) => o.id === order.id)) {
+        return { orders: state.orders.map((o) => (o.id === order.id ? order : o)) };
+      }
+      return { orders: [order, ...state.orders] };
+    }),
 
   updateOrder: (order) =>
     set((state) => {
-      const terminal = ["filled", "canceled", "expired", "rejected"];
+      const terminal = ["filled", "canceled", "expired", "rejected", "replaced",
+        "pending_cancel", "pending_replace"];
       if (terminal.includes(order.status)) {
-        // Remove terminal orders from the list
+        // Remove terminal/transitional orders from the list
         return { orders: state.orders.filter((o) => o.id !== order.id) };
       }
       return { orders: state.orders.map((o) => (o.id === order.id ? order : o)) };

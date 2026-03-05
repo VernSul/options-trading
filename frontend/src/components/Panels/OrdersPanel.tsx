@@ -11,14 +11,20 @@ export function OrdersPanel() {
   }, [fetchOrders]);
 
   const handleCancel = (id: string) => {
+    // Optimistically remove from UI immediately
+    useOrderStore.setState((state) => ({
+      orders: state.orders.filter((o) => o.id !== id),
+    }));
     cancelOrder(id);
-    setTimeout(fetchOrders, 1000);
+    setTimeout(fetchOrders, 1500);
   };
 
   const handleCancelAll = () => {
+    // Optimistically clear all from UI immediately
+    useOrderStore.setState({ orders: [] });
     cancelAllOrders();
-    setTimeout(fetchOrders, 1000);
-    setTimeout(fetchOrders, 3000);
+    setTimeout(fetchOrders, 1500);
+    setTimeout(fetchOrders, 4000);
   };
 
   return (

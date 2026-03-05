@@ -8,15 +8,12 @@ import { OrdersPanel } from "./components/Panels/OrdersPanel";
 import { TradesPanel } from "./components/Panels/TradesPanel";
 import { StopsPanel } from "./components/Panels/StopsPanel";
 import { AccountPanel } from "./components/Panels/AccountPanel";
-import { CrossingAlertForm } from "./components/CrossingAlerts/CrossingAlertForm";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
-// PnLProjection box removed — projection lines on chart are sufficient
 import { KeyboardHelp } from "./components/KeyboardHelp/KeyboardHelp";
 import { StatusBar } from "./components/common/StatusBar";
 import { ToastContainer } from "./components/common/Toast";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
-import { useCrossingStore } from "./stores/useCrossingStore";
 import { useMarketStore } from "./stores/useMarketStore";
 import { useSettingsStore } from "./stores/useSettingsStore";
 import { autoSelectOption, type AutoSelectResult } from "./utils/optionSelector";
@@ -51,11 +48,6 @@ function App() {
     autoCallOption,
     autoPutOption,
   );
-
-  const { fetchAlerts } = useCrossingStore();
-  useEffect(() => {
-    fetchAlerts();
-  }, [fetchAlerts]);
 
   const { latestQuote, bars } = useMarketStore();
   const { dollarAmount, stopLossPercent, trailingStartPercent, showProjections } = settings;
@@ -215,7 +207,7 @@ function App() {
             onAutoSelect={handleAutoSelect}
             onChainReady={handleChainReady}
           />
-          <CrossingAlertForm />
+          <TradesPanel />
         </div>
 
         <div className="right-column">
@@ -230,7 +222,6 @@ function App() {
           <PositionsPanel />
           <StopsPanel />
           <OrdersPanel />
-          <TradesPanel />
         </div>
       </main>
 

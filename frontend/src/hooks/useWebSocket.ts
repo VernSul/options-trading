@@ -3,7 +3,6 @@ import { useMarketStore } from "../stores/useMarketStore";
 import { useOrderStore } from "../stores/useOrderStore";
 import { usePositionStore } from "../stores/usePositionStore";
 import { useAccountStore } from "../stores/useAccountStore";
-import { useCrossingStore } from "../stores/useCrossingStore";
 import { useStopStore } from "../stores/useStopStore";
 import { useWSStore } from "../stores/useWSStore";
 import { showToast } from "../components/common/Toast";
@@ -165,11 +164,6 @@ export function useWebSocket() {
           case "account_update": {
             const account = msg.payload as Account;
             useAccountStore.setState({ account });
-            break;
-          }
-          case "crossing_triggered": {
-            const data = msg.payload as { alert: { id: string } };
-            useCrossingStore.getState().markTriggered(data.alert.id);
             break;
           }
           case "trailing_stop_update": {

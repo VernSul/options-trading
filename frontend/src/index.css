@@ -63,14 +63,14 @@ body {
 }
 
 .right-column {
-  width: 420px;
-  min-width: 300px;
-  max-width: 50vw;
+  width: 520px;
+  min-width: 360px;
+  max-width: 55vw;
   overflow-y: auto;
-  padding: 8px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   resize: horizontal;
   direction: rtl; /* resize handle on left edge */
 }
@@ -191,12 +191,12 @@ body {
 .panel-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .panel-table th {
   text-align: left;
-  padding: 4px 6px;
+  padding: 6px 8px;
   color: var(--text-secondary);
   font-weight: 500;
   border-bottom: 1px solid var(--border);
@@ -207,7 +207,7 @@ body {
 }
 
 .panel-table td {
-  padding: 4px 6px;
+  padding: 5px 8px;
   border-bottom: 1px solid rgba(42, 42, 74, 0.5);
   white-space: nowrap;
 }
@@ -493,26 +493,6 @@ body {
 
 .chain-table .ask {
   color: var(--red);
-}
-
-/* Crossing Alerts */
-.crossing-alerts {
-  padding: 8px 12px;
-  flex: 0 0 auto;
-  overflow-y: auto;
-}
-
-.crossing-alerts h3 {
-  font-size: 13px;
-  margin-bottom: 6px;
-}
-
-.crossing-form .form-row {
-  margin-bottom: 6px;
-}
-
-.triggered {
-  opacity: 0.5;
 }
 
 /* Colors */

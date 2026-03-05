@@ -6,6 +6,7 @@ import type {
   CrossingAlert,
   OptionChain,
   Bar,
+  TradeRecord,
 } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
@@ -87,4 +88,6 @@ export const rest = {
 
   deleteCrossing: (id: string) =>
     request<void>(`/api/crossing/${id}`, { method: "DELETE" }),
+
+  getTrades: () => request<TradeRecord[]>("/api/trades"),
 };

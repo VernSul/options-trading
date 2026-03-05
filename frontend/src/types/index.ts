@@ -169,3 +169,20 @@ export interface TrailingStopUpdate {
   stopPrice: string;
   safetyStop: string;
 }
+
+// Round-trip trade from backend
+export interface TradeRecord {
+  symbol: string;
+  side: string;
+  qty: string;
+  entryPrice: string;
+  exitPrice: string | null;
+  pnl: string | null;
+  pnlPercent: string | null;
+  entryTime: string;
+  exitTime: string | null;
+  status: "open" | "closed";
+  entryOrderId: string;
+  exitOrderId: string;
+  positionIntent: string;
+}

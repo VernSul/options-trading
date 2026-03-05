@@ -131,7 +131,7 @@ export function OrderEntry({
   };
 
   return (
-    <CollapsiblePanel title="Place Order" className="order-entry">
+    <CollapsiblePanel id="order-entry" title="Place Order" className="order-entry">
     <form onSubmit={handleSubmit}>
       <div className="form-row">
         <input

@@ -46,6 +46,7 @@ export function PositionsPanel() {
 
   return (
     <CollapsiblePanel
+      id="positions"
       title={`Positions${loading ? " ..." : ""}`}
       className="positions-panel"
       headerRight={

@@ -10,7 +10,7 @@ export function SettingsPanel() {
   const settings = useSettingsStore();
 
   return (
-    <CollapsiblePanel title="Settings" className="settings-panel" defaultOpen={false}>
+    <CollapsiblePanel id="settings" title="Settings" className="settings-panel" defaultOpen={false}>
       <div className="settings-grid">
         <label className="setting-item">
           <span>Direction</span>

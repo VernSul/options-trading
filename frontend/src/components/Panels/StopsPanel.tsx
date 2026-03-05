@@ -25,7 +25,7 @@ export function StopsPanel() {
   if (stops.length === 0) return null;
 
   return (
-    <CollapsiblePanel title="Stop Monitor" className="stops-panel">
+    <CollapsiblePanel id="stops" title="Stop Monitor" className="stops-panel">
       <div className="panel-table-wrap">
       <table className="panel-table">
         <thead>

@@ -23,7 +23,7 @@ export function AccountPanel() {
   if (!account) return <div className="panel">Failed to load account</div>;
 
   return (
-    <CollapsiblePanel title="Account" className="account-panel">
+    <CollapsiblePanel id="account" title="Account" className="account-panel">
       <div className="account-grid">
         <div className="account-item">
           <span className="label">Equity</span>

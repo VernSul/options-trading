@@ -66,6 +66,7 @@ export function TradesPanel() {
 
   return (
     <CollapsiblePanel
+      id="trades"
       title={`Trades${loading ? " ..." : ""}${titleExtra}`}
       className="trades-panel"
       headerRight={

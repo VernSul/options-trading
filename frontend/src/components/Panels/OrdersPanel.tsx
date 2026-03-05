@@ -39,6 +39,7 @@ export function OrdersPanel() {
 
   return (
     <CollapsiblePanel
+      id="orders"
       title={`Orders${loading ? " ..." : ""}`}
       className="orders-panel"
       headerRight={

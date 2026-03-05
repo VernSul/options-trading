@@ -22,7 +22,6 @@ const (
 	MsgTradeUpdate        = "trade_update"
 	MsgPositionUpdate     = "position_update"
 	MsgCrossingTriggered  = "crossing_triggered"
-	MsgStopLossPlaced     = "stop_loss_placed"
 	MsgTrailingStopUpdate = "trailing_stop_update"
 	MsgTrailingStopFired  = "trailing_stop_fired"
 	MsgHeartbeat          = "heartbeat"

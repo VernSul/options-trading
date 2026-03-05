@@ -46,18 +46,11 @@ type TrailingStop struct {
 	Qty           int             `json:"qty"`
 	TrailAmount   decimal.Decimal `json:"trailAmount"`
 	HighWater     decimal.Decimal `json:"highWater"`
+	StopPrice     decimal.Decimal `json:"stopPrice"`     // current computed stop = HW*(1-offsetPct)
 	Active        bool            `json:"active"`
-	Fired         bool            `json:"fired"`         // true after stop order fills
+	Fired         bool            `json:"fired"`         // true once close is triggered
 	EntryPrice    decimal.Decimal `json:"entryPrice"`    // filled price of entry order
 	StartPercent  decimal.Decimal `json:"startPercent"`  // % gain to activate (e.g. 0.02)
 	OffsetPercent decimal.Decimal `json:"offsetPercent"` // % drop from high-water for stop (e.g. 0.01)
-	StopOrderID   string          `json:"stopOrderId"`   // current Alpaca stop order ID (moves up)
 }
 
-type PendingStopLoss struct {
-	EntryOrderID string           `json:"entryOrderId"`
-	Symbol       string           `json:"symbol"`
-	Qty          int              `json:"qty"`
-	StopPrice    decimal.Decimal  `json:"stopPrice"`
-	LimitPrice   *decimal.Decimal `json:"limitPrice,omitempty"`
-}

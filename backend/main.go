@@ -69,15 +69,6 @@ func main() {
 	crossingEngine := orders.NewCrossingEngine(client.Trading)
 
 	// Wire order manager callbacks
-	orderMgr.OnStopPlaced = func(entryOrderID string, stopOrder *alpacaAPI.Order) {
-		wsHub.BroadcastMessage(hub.MsgStopLossPlaced, map[string]interface{}{
-			"entryOrderId": entryOrderID,
-			"stopOrderId":  stopOrder.ID,
-			"symbol":       stopOrder.Symbol,
-			"stopPrice":    stopOrder.StopPrice,
-		})
-	}
-
 	orderMgr.OnTrailingInit = func(ts *orders.TrailingStop) {
 		// Auto-subscribe to option quotes so the trailing engine receives price updates
 		if err := optionStream.SubscribeToQuotes(ts.Symbol); err != nil {
@@ -158,8 +149,6 @@ func main() {
 		wsHub.BroadcastMessage(hub.MsgTradeUpdate, tu)
 		if tu.Event == "fill" && tu.Price != nil {
 			orderMgr.HandleFill(tu.Order.ID, *tu.Price)
-			// Check if this was a trailing stop order that just filled
-			trailingEngine.HandleStopFilled(tu.Order.ID)
 		}
 		if tu.Event == "fill" || tu.Event == "canceled" || tu.Event == "partial_fill" {
 			go func() {

@@ -183,11 +183,6 @@ export function useWebSocket() {
             showToast(`Trailing fired — closing ${ts.symbol}`, "info");
             break;
           }
-          case "stop_loss_placed": {
-            const data = msg.payload as { symbol: string; stopPrice: string };
-            showToast(`Safety stop placed: ${data.symbol} @ $${data.stopPrice}`, "info");
-            break;
-          }
           case "heartbeat":
             lastQuoteTimeRef.current = Date.now();
             break;

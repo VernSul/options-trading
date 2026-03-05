@@ -166,5 +166,5 @@ export interface TrailingStopUpdate {
   entryPrice: string;
   startPercent: string;
   offsetPercent: string;
-  stopOrderId: string;
+  stopPrice: string;
 }

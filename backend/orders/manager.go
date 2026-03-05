@@ -18,17 +18,14 @@ type pendingFill struct {
 type OrderManager struct {
 	mu             sync.Mutex
 	trading        *alpaca.Client
-	pendingStops   map[string]*PendingStopLoss // entryOrderID -> stop config
-	trailingStops  map[string]*TrailingStop    // entryOrderID -> trailing stop
-	earlyFills     map[string]pendingFill      // fills that arrived before config was stored
-	OnStopPlaced   func(orderID string, stop *alpaca.Order)
+	trailingStops  map[string]*TrailingStop // entryOrderID -> trailing stop
+	earlyFills     map[string]pendingFill   // fills that arrived before config was stored
 	OnTrailingInit func(ts *TrailingStop)
 }
 
 func NewOrderManager(trading *alpaca.Client) *OrderManager {
 	return &OrderManager{
 		trading:       trading,
-		pendingStops:  make(map[string]*PendingStopLoss),
 		trailingStops: make(map[string]*TrailingStop),
 		earlyFills:    make(map[string]pendingFill),
 	}
@@ -57,10 +54,9 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 
 	om.mu.Lock()
 
-	// When trailing is enabled, use its safetyStop as the initial stop price.
-	// Don't queue a separate pendingStop — trailing owns the stop order.
+	// Trailing stop (software-managed — Alpaca doesn't support stop orders on options)
 	if req.TrailingStop != nil {
-		ts := &TrailingStop{
+		om.trailingStops[order.ID] = &TrailingStop{
 			OrderID:       order.ID,
 			Symbol:        req.Symbol,
 			Qty:           req.Qty,
@@ -70,32 +66,11 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 			OffsetPercent: req.TrailingStop.OffsetPercent,
 			Active:        false,
 		}
-		om.trailingStops[order.ID] = ts
-
-		// Use safetyStop as initial stop price
-		om.pendingStops[order.ID] = &PendingStopLoss{
-			EntryOrderID: order.ID,
-			Symbol:       req.Symbol,
-			Qty:          req.Qty,
-			StopPrice:    req.TrailingStop.SafetyStop,
-		}
-
-		log.Printf("Queued trailing stop for order %s startPercent=%s offsetPercent=%s initialStop=%s",
-			order.ID, req.TrailingStop.StartPercent, req.TrailingStop.OffsetPercent, req.TrailingStop.SafetyStop)
-	} else if req.StopLoss != nil {
-		// Standalone stop-loss (no trailing)
-		om.pendingStops[order.ID] = &PendingStopLoss{
-			EntryOrderID: order.ID,
-			Symbol:       req.Symbol,
-			Qty:          req.Qty,
-			StopPrice:    req.StopLoss.StopPrice,
-			LimitPrice:   req.StopLoss.LimitPrice,
-		}
-		log.Printf("Queued stop-loss for order %s at %s", order.ID, req.StopLoss.StopPrice)
+		log.Printf("Queued trailing stop for order %s startPercent=%s offsetPercent=%s",
+			order.ID, req.TrailingStop.StartPercent, req.TrailingStop.OffsetPercent)
 	}
 
-	// Check if a fill already arrived while we were placing the order (race condition
-	// with market orders that fill near-instantly). Replay the fill now that config is stored.
+	// Check if a fill already arrived while we were placing the order
 	var earlyFill *pendingFill
 	if ef, ok := om.earlyFills[order.ID]; ok {
 		earlyFill = &ef
@@ -115,14 +90,6 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 func (om *OrderManager) HandleFill(orderID string, filledPrice decimal.Decimal) {
 	om.mu.Lock()
 
-	// Check for pending stop-loss
-	var pendingStop *PendingStopLoss
-	if ps, ok := om.pendingStops[orderID]; ok {
-		pendingStop = ps
-		delete(om.pendingStops, orderID)
-	}
-
-	// Check for pending trailing stop
 	var trailingStop *TrailingStop
 	if ts, ok := om.trailingStops[orderID]; ok {
 		ts.EntryPrice = filledPrice
@@ -130,9 +97,7 @@ func (om *OrderManager) HandleFill(orderID string, filledPrice decimal.Decimal) 
 		trailingStop = ts
 	}
 
-	// If neither stop-loss nor trailing stop found, this fill arrived before
-	// PlaceSmartOrder stored the config. Buffer it for replay.
-	if pendingStop == nil && trailingStop == nil {
+	if trailingStop == nil {
 		om.earlyFills[orderID] = pendingFill{orderID: orderID, filledPrice: filledPrice}
 		om.mu.Unlock()
 		log.Printf("Fill arrived before config stored, buffering: order=%s price=%s", orderID, filledPrice)
@@ -141,55 +106,11 @@ func (om *OrderManager) HandleFill(orderID string, filledPrice decimal.Decimal) 
 
 	om.mu.Unlock()
 
-	// Always place the stop order on fill
-	if pendingStop != nil {
-		om.placeInitialStop(pendingStop, trailingStop)
-	}
+	log.Printf("Entry filled: order=%s symbol=%s price=%s — registering trailing stop",
+		orderID, trailingStop.Symbol, filledPrice)
 
-	// Register trailing stop with engine (after stop is placed)
-	if trailingStop != nil && om.OnTrailingInit != nil {
+	if om.OnTrailingInit != nil {
 		om.OnTrailingInit(trailingStop)
-	}
-}
-
-// placeInitialStop places the stop-loss order on Alpaca. If a trailing stop is
-// also configured, the stop order ID is stored on the TrailingStop so the engine
-// can cancel+replace it as the high-water mark moves.
-func (om *OrderManager) placeInitialStop(ps *PendingStopLoss, ts *TrailingStop) {
-	qty := decimal.NewFromInt(int64(ps.Qty))
-
-	orderReq := alpaca.PlaceOrderRequest{
-		Symbol:         ps.Symbol,
-		Qty:            &qty,
-		Side:           alpaca.Sell,
-		Type:           alpaca.Stop,
-		TimeInForce:    alpaca.GTC,
-		StopPrice:      &ps.StopPrice,
-		PositionIntent: alpaca.SellToClose,
-	}
-
-	if ps.LimitPrice != nil {
-		orderReq.Type = alpaca.StopLimit
-		orderReq.LimitPrice = ps.LimitPrice
-	}
-
-	order, err := om.trading.PlaceOrder(orderReq)
-	if err != nil {
-		log.Printf("Failed to place stop-loss: %v", err)
-		return
-	}
-
-	log.Printf("Stop-loss placed: id=%s symbol=%s stop=%s", order.ID, ps.Symbol, ps.StopPrice)
-
-	// If trailing is attached, store the stop order ID so the engine can move it
-	if ts != nil {
-		om.mu.Lock()
-		ts.StopOrderID = order.ID
-		om.mu.Unlock()
-	}
-
-	if om.OnStopPlaced != nil {
-		om.OnStopPlaced(ps.EntryOrderID, order)
 	}
 }
 

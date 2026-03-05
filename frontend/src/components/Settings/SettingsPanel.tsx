@@ -81,14 +81,14 @@ export function SettingsPanel() {
           <label className="setting-item">
             <span>$ Amount</span>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               className="input"
               value={settings.dollarAmount}
-              onChange={(e) =>
-                settings.setDollarAmount(parseInt(e.target.value) || 100)
-              }
-              min={1}
-              step={100}
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^0-9]/g, "");
+                settings.setDollarAmount(parseInt(v) || 0);
+              }}
             />
           </label>
 

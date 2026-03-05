@@ -132,8 +132,10 @@ func (om *OrderManager) HandleFill(orderID string, filledPrice decimal.Decimal) 
 
 	om.mu.Unlock()
 
-	// Fire callbacks outside the lock (they may do network calls)
-	if pendingStop != nil {
+	// Fire callbacks outside the lock (they may do network calls).
+	// When trailing is enabled, skip the standalone stop-loss — the safety-net
+	// stop in the trailing flow replaces it.
+	if pendingStop != nil && trailingStop == nil {
 		go om.placeStopOrder(pendingStop)
 	}
 	if trailingStop != nil {

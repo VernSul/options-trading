@@ -48,6 +48,7 @@ type TrailingStop struct {
 	HighWater     decimal.Decimal `json:"highWater"`
 	SafetyStop    decimal.Decimal `json:"safetyStop"`
 	Active        bool            `json:"active"`
+	Fired         bool            `json:"fired"`         // true after trigger, prevents re-activation loop
 	EntryPrice    decimal.Decimal `json:"entryPrice"`    // filled price of entry order
 	StartPercent  decimal.Decimal `json:"startPercent"`  // % gain to activate (e.g. 0.02)
 	OffsetPercent decimal.Decimal `json:"offsetPercent"` // % drop from high-water to fire (e.g. 0.01)

@@ -45,6 +45,11 @@ func (tse *TrailingStopEngine) UpdatePrice(symbol string, midPrice decimal.Decim
 			continue
 		}
 
+		// Skip if already fired (waiting for removal)
+		if ts.Fired {
+			continue
+		}
+
 		if !ts.Active {
 			// Phase 1: waiting for start threshold
 			if ts.EntryPrice.IsZero() {
@@ -80,25 +85,40 @@ func (tse *TrailingStopEngine) UpdatePrice(symbol string, midPrice decimal.Decim
 			log.Printf("Trailing stop triggered: symbol=%s mid=%s highwater=%s trigger=%s offsetPct=%s",
 				ts.Symbol, midPrice, ts.HighWater, triggerPrice, ts.OffsetPercent)
 			ts.Active = false
+			ts.Fired = true // prevent re-activation
 			go tse.fireClose(ts)
 		}
 	}
 }
 
 func (tse *TrailingStopEngine) fireClose(ts *TrailingStop) {
+	// Use ClosePosition instead of PlaceOrder to avoid "uncovered option" errors.
+	// ClosePosition handles the sell side automatically.
 	qty := decimal.NewFromInt(int64(ts.Qty))
-
-	order, err := tse.trading.PlaceOrder(alpaca.PlaceOrderRequest{
-		Symbol:         ts.Symbol,
-		Qty:            &qty,
-		Side:           alpaca.Sell,
-		Type:           alpaca.Market,
-		TimeInForce:    alpaca.Day,
-		PositionIntent: alpaca.SellToClose,
+	order, err := tse.trading.ClosePosition(ts.Symbol, alpaca.ClosePositionRequest{
+		Qty: qty,
 	})
 	if err != nil {
-		log.Printf("Trailing stop close failed: %v", err)
-		return
+		log.Printf("Trailing stop close via ClosePosition failed: %v", err)
+		// Fallback: try PlaceOrder with BuyToClose in case it's a short position,
+		// or the symbol format differs
+		order, err = tse.trading.PlaceOrder(alpaca.PlaceOrderRequest{
+			Symbol:         ts.Symbol,
+			Qty:            &qty,
+			Side:           alpaca.Sell,
+			Type:           alpaca.Market,
+			TimeInForce:    alpaca.Day,
+			PositionIntent: alpaca.SellToClose,
+		})
+		if err != nil {
+			log.Printf("Trailing stop close fallback also failed: %v", err)
+			// Mark as not fired so it can retry on next trigger
+			tse.mu.Lock()
+			ts.Fired = false
+			ts.Active = false
+			tse.mu.Unlock()
+			return
+		}
 	}
 
 	log.Printf("Trailing stop close order placed: id=%s symbol=%s", order.ID, ts.Symbol)
@@ -111,6 +131,11 @@ func (tse *TrailingStopEngine) fireClose(ts *TrailingStop) {
 			log.Printf("Cancelled safety-net stop: id=%s", ts.SafetyOrderID)
 		}
 	}
+
+	// Remove from engine — this trailing stop is done
+	tse.mu.Lock()
+	delete(tse.stops, ts.OrderID)
+	tse.mu.Unlock()
 
 	if tse.OnFired != nil {
 		tse.OnFired(ts, order)

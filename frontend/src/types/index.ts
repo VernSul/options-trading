@@ -167,4 +167,5 @@ export interface TrailingStopUpdate {
   startPercent: string;
   offsetPercent: string;
   stopPrice: string;
+  safetyStop: string;
 }

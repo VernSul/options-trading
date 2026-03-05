@@ -28,8 +28,8 @@ func (tse *TrailingStopEngine) Register(ts *TrailingStop) {
 	tse.mu.Lock()
 	defer tse.mu.Unlock()
 	tse.stops[ts.OrderID] = ts
-	log.Printf("Trailing stop registered: order=%s symbol=%s entry=%s startPct=%s offsetPct=%s",
-		ts.OrderID, ts.Symbol, ts.EntryPrice, ts.StartPercent, ts.OffsetPercent)
+	log.Printf("Trailing stop registered: order=%s symbol=%s entry=%s safetyStop=%s startPct=%s offsetPct=%s",
+		ts.OrderID, ts.Symbol, ts.EntryPrice, ts.SafetyStop, ts.StartPercent, ts.OffsetPercent)
 }
 
 // UpdatePrice is called on every option quote.
@@ -37,7 +37,11 @@ func (tse *TrailingStopEngine) Register(ts *TrailingStop) {
 // Alpaca does NOT support stop orders on options, so this engine manages
 // the trailing stop entirely in software:
 //
-// Phase 1 (inactive): wait for price >= entry*(1+startPercent), then activate.
+// Phase 1 (inactive): safety stop protects against loss. If price drops
+//
+//	to safetyStop, close immediately. Otherwise wait for
+//	price >= entry*(1+startPercent), then activate trailing.
+//
 // Phase 2 (active): track high-water mark + computed stop price.
 //
 //	When price drops to stopPrice = highWater*(1-offsetPercent), close
@@ -58,7 +62,16 @@ func (tse *TrailingStopEngine) UpdatePrice(symbol string, midPrice decimal.Decim
 		one := decimal.NewFromInt(1)
 
 		if !ts.Active {
-			// Phase 1: waiting for start threshold
+			// Phase 1: waiting for start threshold — safety stop protects against loss
+			if !ts.SafetyStop.IsZero() && midPrice.LessThanOrEqual(ts.SafetyStop) {
+				log.Printf("Safety stop triggered: order=%s symbol=%s mid=%s safetyStop=%s",
+					ts.OrderID, ts.Symbol, midPrice, ts.SafetyStop)
+				ts.Fired = true
+				ts.StopPrice = ts.SafetyStop
+				toClose = ts
+				break
+			}
+
 			activationPrice := ts.EntryPrice.Mul(one.Add(ts.StartPercent))
 			if midPrice.GreaterThanOrEqual(activationPrice) {
 				ts.Active = true

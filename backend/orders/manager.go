@@ -61,6 +61,7 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 			Symbol:        req.Symbol,
 			Qty:           req.Qty,
 			TrailAmount:   req.TrailingStop.TrailAmount,
+			SafetyStop:    req.TrailingStop.SafetyStop,
 			EntryPrice:    decimal.Zero, // set on fill
 			StartPercent:  req.TrailingStop.StartPercent,
 			OffsetPercent: req.TrailingStop.OffsetPercent,

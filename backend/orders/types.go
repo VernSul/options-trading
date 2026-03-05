@@ -47,6 +47,7 @@ type TrailingStop struct {
 	TrailAmount   decimal.Decimal `json:"trailAmount"`
 	HighWater     decimal.Decimal `json:"highWater"`
 	StopPrice     decimal.Decimal `json:"stopPrice"`     // current computed stop = HW*(1-offsetPct)
+	SafetyStop    decimal.Decimal `json:"safetyStop"`    // initial stop price protecting against loss before trailing activates
 	Active        bool            `json:"active"`
 	Fired         bool            `json:"fired"`         // true once close is triggered
 	EntryPrice    decimal.Decimal `json:"entryPrice"`    // filled price of entry order

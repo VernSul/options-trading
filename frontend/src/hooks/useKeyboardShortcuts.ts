@@ -37,13 +37,13 @@ function buildOrder(option: AutoOption): SmartOrderRequest | null {
     timeInForce: "day",
   };
 
-  if (settings.stopLossPercent > 0) {
+  if (settings.enableStopLoss && settings.stopLossPercent > 0) {
     order.stopLoss = {
       stopPrice: (entryPrice * (1 - settings.stopLossPercent)).toFixed(2),
     };
   }
 
-  if (settings.trailingStartPercent > 0 && settings.trailingOffsetPercent > 0) {
+  if (settings.enableTrailing && settings.trailingStartPercent > 0 && settings.trailingOffsetPercent > 0) {
     order.trailingStop = {
       trailAmount: (entryPrice * settings.trailingOffsetPercent).toFixed(2),
       safetyStop: (
@@ -51,6 +51,12 @@ function buildOrder(option: AutoOption): SmartOrderRequest | null {
       ).toFixed(2),
       startPercent: settings.trailingStartPercent.toString(),
       offsetPercent: settings.trailingOffsetPercent.toString(),
+    };
+  }
+
+  if (settings.enableTakeProfit && settings.takeProfitPercent > 0) {
+    order.takeProfit = {
+      limitPrice: (entryPrice * (1 + settings.takeProfitPercent)).toFixed(2),
     };
   }
 

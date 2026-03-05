@@ -20,6 +20,8 @@ interface SettingsState {
   currentSymbol: string;
   enableStopLoss: boolean;
   enableTrailing: boolean;
+  enableTakeProfit: boolean;
+  takeProfitPercent: number;
   showExtendedHours: boolean;
 
   setDefaultExpDays: (v: number) => void;
@@ -36,6 +38,8 @@ interface SettingsState {
   setCurrentSymbol: (v: string) => void;
   setEnableStopLoss: (v: boolean) => void;
   setEnableTrailing: (v: boolean) => void;
+  setEnableTakeProfit: (v: boolean) => void;
+  setTakeProfitPercent: (v: number) => void;
   setShowExtendedHours: (v: boolean) => void;
 }
 
@@ -56,6 +60,8 @@ export const useSettingsStore = create<SettingsState>()(
       currentSymbol: "SPY",
       enableStopLoss: true,
       enableTrailing: false,
+      enableTakeProfit: false,
+      takeProfitPercent: 1.0,
       showExtendedHours: false,
 
       setDefaultExpDays: (v) => set({ defaultExpDays: v }),
@@ -72,6 +78,8 @@ export const useSettingsStore = create<SettingsState>()(
       setCurrentSymbol: (v) => set({ currentSymbol: v }),
       setEnableStopLoss: (v) => set({ enableStopLoss: v }),
       setEnableTrailing: (v) => set({ enableTrailing: v }),
+      setEnableTakeProfit: (v) => set({ enableTakeProfit: v }),
+      setTakeProfitPercent: (v) => set({ takeProfitPercent: v }),
       setShowExtendedHours: (v) => set({ showExtendedHours: v }),
     }),
     { name: "trading-settings" }

@@ -110,6 +110,23 @@ export function SettingsPanel() {
           </label>
 
           <label className="setting-item">
+            <span>Take Profit %</span>
+            <input
+              type="number"
+              className="input"
+              value={(settings.takeProfitPercent * 100).toFixed(0)}
+              onChange={(e) =>
+                settings.setTakeProfitPercent(
+                  (parseFloat(e.target.value) || 0) / 100
+                )
+              }
+              min={0}
+              max={1000}
+              step={10}
+            />
+          </label>
+
+          <label className="setting-item">
             <span>Trail Start %</span>
             <input
               type="number"

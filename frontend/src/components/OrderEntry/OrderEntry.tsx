@@ -20,6 +20,7 @@ export function OrderEntry({
   const {
     dollarAmount, stopLossPercent, trailingStartPercent, trailingOffsetPercent,
     enableStopLoss, enableTrailing, setEnableStopLoss, setEnableTrailing,
+    enableTakeProfit, takeProfitPercent, setEnableTakeProfit,
   } = useSettingsStore();
   const { sendOrder } = useWSStore();
 
@@ -66,6 +67,12 @@ export function OrderEntry({
       ? entryPrice * (1 - trailingStartPercent - trailingOffsetPercent)
       : 0;
 
+  // Take profit target price
+  const computedTakeProfitPrice =
+    entryPrice > 0 && enableTakeProfit
+      ? entryPrice * (1 + takeProfitPercent)
+      : 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -102,6 +109,12 @@ export function OrderEntry({
         safetyStop: computedSafetyStop > 0 ? computedSafetyStop.toFixed(2) : (entryPrice * 0.5).toFixed(2),
         startPercent: trailingStartPercent.toString(),
         offsetPercent: trailingOffsetPercent.toString(),
+      };
+    }
+
+    if (enableTakeProfit && computedTakeProfitPrice > 0) {
+      order.takeProfit = {
+        limitPrice: computedTakeProfitPrice.toFixed(2),
       };
     }
 
@@ -224,6 +237,27 @@ export function OrderEntry({
             {computedTrailAmount > 0 && (
               <span className="computed-value">
                 = ${computedTrailAmount.toFixed(2)} trail
+              </span>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="form-row checkbox-row sl-config">
+        <label>
+          <input
+            type="checkbox"
+            checked={enableTakeProfit}
+            onChange={(e) => setEnableTakeProfit(e.target.checked)}
+          />
+          Take Profit
+        </label>
+        {enableTakeProfit && (
+          <>
+            <span>{(takeProfitPercent * 100).toFixed(0)}%</span>
+            {computedTakeProfitPrice > 0 && (
+              <span className="computed-value">
+                = ${computedTakeProfitPrice.toFixed(2)}
               </span>
             )}
           </>

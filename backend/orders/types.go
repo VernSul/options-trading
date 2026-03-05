@@ -3,15 +3,20 @@ package orders
 import "github.com/shopspring/decimal"
 
 type SmartOrder struct {
-	Symbol         string           `json:"symbol"`
-	Qty            int              `json:"qty"`
-	Side           string           `json:"side"`           // buy, sell
-	Type           string           `json:"type"`           // market, limit
-	PositionIntent string           `json:"positionIntent"` // buy_to_open, buy_to_close, sell_to_open, sell_to_close
-	LimitPrice     *decimal.Decimal `json:"limitPrice,omitempty"`
-	TimeInForce    string           `json:"timeInForce"` // day
-	StopLoss       *StopLossConfig  `json:"stopLoss,omitempty"`
-	TrailingStop   *TrailingConfig  `json:"trailingStop,omitempty"`
+	Symbol         string            `json:"symbol"`
+	Qty            int               `json:"qty"`
+	Side           string            `json:"side"`           // buy, sell
+	Type           string            `json:"type"`           // market, limit
+	PositionIntent string            `json:"positionIntent"` // buy_to_open, buy_to_close, sell_to_open, sell_to_close
+	LimitPrice     *decimal.Decimal  `json:"limitPrice,omitempty"`
+	TimeInForce    string            `json:"timeInForce"` // day
+	StopLoss       *StopLossConfig   `json:"stopLoss,omitempty"`
+	TrailingStop   *TrailingConfig   `json:"trailingStop,omitempty"`
+	TakeProfit     *TakeProfitConfig `json:"takeProfit,omitempty"`
+}
+
+type TakeProfitConfig struct {
+	LimitPrice decimal.Decimal `json:"limitPrice"` // sell-to-close limit price
 }
 
 type StopLossConfig struct {

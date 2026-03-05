@@ -15,18 +15,27 @@ type pendingFill struct {
 	filledPrice decimal.Decimal
 }
 
+type pendingTakeProfit struct {
+	symbol     string
+	qty        int
+	limitPrice decimal.Decimal // computed target price (entry * (1 + pct))
+}
+
 type OrderManager struct {
 	mu             sync.Mutex
 	trading        *alpaca.Client
-	trailingStops  map[string]*TrailingStop // entryOrderID -> trailing stop
-	earlyFills     map[string]pendingFill   // fills that arrived before config was stored
+	trailingStops  map[string]*TrailingStop  // entryOrderID -> trailing stop
+	takeProfits    map[string]pendingTakeProfit // entryOrderID -> pending take profit
+	earlyFills     map[string]pendingFill    // fills that arrived before config was stored
 	OnTrailingInit func(ts *TrailingStop)
+	OnTakeProfitPlaced func(symbol string, limitPrice decimal.Decimal, orderID string)
 }
 
 func NewOrderManager(trading *alpaca.Client) *OrderManager {
 	return &OrderManager{
 		trading:       trading,
 		trailingStops: make(map[string]*TrailingStop),
+		takeProfits:   make(map[string]pendingTakeProfit),
 		earlyFills:    make(map[string]pendingFill),
 	}
 }
@@ -84,6 +93,16 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 		log.Printf("Queued stop-loss for order %s stopPrice=%s", order.ID, req.StopLoss.StopPrice)
 	}
 
+	// Take profit: place limit sell-to-close on fill
+	if req.TakeProfit != nil {
+		om.takeProfits[order.ID] = pendingTakeProfit{
+			symbol:     req.Symbol,
+			qty:        req.Qty,
+			limitPrice: req.TakeProfit.LimitPrice,
+		}
+		log.Printf("Queued take-profit for order %s limitPrice=%s", order.ID, req.TakeProfit.LimitPrice)
+	}
+
 	// Check if a fill already arrived while we were placing the order
 	var earlyFill *pendingFill
 	if ef, ok := om.earlyFills[order.ID]; ok {
@@ -111,7 +130,14 @@ func (om *OrderManager) HandleFill(orderID string, filledPrice decimal.Decimal) 
 		trailingStop = ts
 	}
 
-	if trailingStop == nil {
+	var tp *pendingTakeProfit
+	if t, ok := om.takeProfits[orderID]; ok {
+		tp = &t
+		delete(om.takeProfits, orderID)
+	}
+
+	// If no trailing stop and no take profit configured, buffer as early fill
+	if trailingStop == nil && tp == nil {
 		om.earlyFills[orderID] = pendingFill{orderID: orderID, filledPrice: filledPrice}
 		om.mu.Unlock()
 		log.Printf("Fill arrived before config stored, buffering: order=%s price=%s", orderID, filledPrice)
@@ -120,11 +146,45 @@ func (om *OrderManager) HandleFill(orderID string, filledPrice decimal.Decimal) 
 
 	om.mu.Unlock()
 
-	log.Printf("Entry filled: order=%s symbol=%s price=%s — registering trailing stop",
-		orderID, trailingStop.Symbol, filledPrice)
+	// Register trailing/stop-loss with engine
+	if trailingStop != nil {
+		log.Printf("Entry filled: order=%s symbol=%s price=%s — registering trailing stop",
+			orderID, trailingStop.Symbol, filledPrice)
+		if om.OnTrailingInit != nil {
+			om.OnTrailingInit(trailingStop)
+		}
+	}
 
-	if om.OnTrailingInit != nil {
-		om.OnTrailingInit(trailingStop)
+	// Place take-profit limit sell-to-close order
+	if tp != nil {
+		om.placeTakeProfit(orderID, tp)
+	}
+}
+
+func (om *OrderManager) placeTakeProfit(entryOrderID string, tp *pendingTakeProfit) {
+	qty := decimal.NewFromInt(int64(tp.qty))
+	limitPrice := tp.limitPrice
+
+	order, err := om.trading.PlaceOrder(alpaca.PlaceOrderRequest{
+		Symbol:         tp.symbol,
+		Qty:            &qty,
+		Side:           alpaca.Sell,
+		Type:           alpaca.Limit,
+		TimeInForce:    alpaca.Day,
+		LimitPrice:     &limitPrice,
+		PositionIntent: alpaca.SellToClose,
+	})
+	if err != nil {
+		log.Printf("Take-profit order failed: entry=%s symbol=%s limit=%s err=%v",
+			entryOrderID, tp.symbol, limitPrice, err)
+		return
+	}
+
+	log.Printf("Take-profit placed: entry=%s symbol=%s limit=%s tpOrderId=%s",
+		entryOrderID, tp.symbol, limitPrice, order.ID)
+
+	if om.OnTakeProfitPlaced != nil {
+		om.OnTakeProfitPlaced(tp.symbol, limitPrice, order.ID)
 	}
 }
 

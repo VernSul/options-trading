@@ -102,6 +102,9 @@ export interface SmartOrderRequest {
     startPercent: string;
     offsetPercent: string;
   };
+  takeProfit?: {
+    limitPrice: string;
+  };
 }
 
 // Crossing alert

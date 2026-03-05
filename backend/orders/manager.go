@@ -54,7 +54,7 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 
 	om.mu.Lock()
 
-	// Trailing stop (software-managed — Alpaca doesn't support stop orders on options)
+	// Software-managed stops (Alpaca doesn't support stop orders on options)
 	if req.TrailingStop != nil {
 		om.trailingStops[order.ID] = &TrailingStop{
 			OrderID:       order.ID,
@@ -67,8 +67,21 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 			OffsetPercent: req.TrailingStop.OffsetPercent,
 			Active:        false,
 		}
-		log.Printf("Queued trailing stop for order %s startPercent=%s offsetPercent=%s",
-			order.ID, req.TrailingStop.StartPercent, req.TrailingStop.OffsetPercent)
+		log.Printf("Queued trailing stop for order %s safetyStop=%s startPercent=%s offsetPercent=%s",
+			order.ID, req.TrailingStop.SafetyStop, req.TrailingStop.StartPercent, req.TrailingStop.OffsetPercent)
+	} else if req.StopLoss != nil {
+		// Standalone stop-loss: use the trailing engine with only a safety stop
+		om.trailingStops[order.ID] = &TrailingStop{
+			OrderID:       order.ID,
+			Symbol:        req.Symbol,
+			Qty:           req.Qty,
+			SafetyStop:    req.StopLoss.StopPrice,
+			EntryPrice:    decimal.Zero, // set on fill
+			StartPercent:  decimal.NewFromInt(999), // never activates trailing
+			OffsetPercent: decimal.Zero,
+			Active:        false,
+		}
+		log.Printf("Queued stop-loss for order %s stopPrice=%s", order.ID, req.StopLoss.StopPrice)
 	}
 
 	// Check if a fill already arrived while we were placing the order

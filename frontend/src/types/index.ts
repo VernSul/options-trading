@@ -161,9 +161,10 @@ export interface TrailingStopUpdate {
   qty: number;
   trailAmount: string;
   highWater: string;
-  safetyStop: string;
   active: boolean;
+  fired: boolean;
   entryPrice: string;
   startPercent: string;
   offsetPercent: string;
+  stopOrderId: string;
 }

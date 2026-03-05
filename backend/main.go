@@ -91,7 +91,7 @@ func main() {
 		wsHub.BroadcastMessage(hub.MsgTrailingStopUpdate, ts)
 	}
 
-	trailingEngine.OnFired = func(ts *orders.TrailingStop, closeOrder *alpacaAPI.Order) {
+	trailingEngine.OnFired = func(ts *orders.TrailingStop) {
 		wsHub.BroadcastMessage(hub.MsgTrailingStopFired, ts)
 	}
 
@@ -158,6 +158,8 @@ func main() {
 		wsHub.BroadcastMessage(hub.MsgTradeUpdate, tu)
 		if tu.Event == "fill" && tu.Price != nil {
 			orderMgr.HandleFill(tu.Order.ID, *tu.Price)
+			// Check if this was a trailing stop order that just filled
+			trailingEngine.HandleStopFilled(tu.Order.ID)
 		}
 		if tu.Event == "fill" || tu.Event == "canceled" || tu.Event == "partial_fill" {
 			go func() {

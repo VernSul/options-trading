@@ -48,9 +48,9 @@ export const rest = {
 
   cancelAllOrders: () => request<void>("/api/orders", { method: "DELETE" }),
 
-  getQuote: (symbol: string) =>
+  getQuote: (symbol: string, extendedHours = false) =>
     request<{ bp: number; ap: number; bs: number; as: number; t: string }>(
-      `/api/quote/${encodeURIComponent(symbol)}`
+      `/api/quote/${encodeURIComponent(symbol)}${extendedHours ? "?extendedHours=true" : ""}`
     ),
 
   getOptionChain: (symbol: string, params?: Record<string, string>) => {
@@ -60,9 +60,9 @@ export const rest = {
     );
   },
 
-  getBars: (symbol: string, timeframe = "1Min") =>
+  getBars: (symbol: string, timeframe = "1Min", extendedHours = false) =>
     request<Bar[]>(
-      `/api/bars/${encodeURIComponent(symbol)}?timeframe=${timeframe}`
+      `/api/bars/${encodeURIComponent(symbol)}?timeframe=${timeframe}${extendedHours ? "&extendedHours=true" : ""}`
     ),
 
   subscribe: (symbols: string[], channel: string) =>

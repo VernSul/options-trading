@@ -6,13 +6,13 @@ import (
 	"github.com/alpacahq/alpaca-trade-api-go/v3/marketdata"
 )
 
-func (c *Client) GetBars(symbol string, timeframe marketdata.TimeFrame, start, end time.Time, limit int) ([]marketdata.Bar, error) {
+func (c *Client) GetBars(symbol string, timeframe marketdata.TimeFrame, start, end time.Time, limit int, feed marketdata.Feed) ([]marketdata.Bar, error) {
 	return c.MarketData.GetBars(symbol, marketdata.GetBarsRequest{
 		TimeFrame:  timeframe,
 		Start:      start,
 		End:        end,
 		TotalLimit: limit,
-		Feed:       marketdata.IEX,
+		Feed:       feed,
 	})
 }
 
@@ -27,8 +27,8 @@ func (c *Client) GetOptionSnapshot(symbol string) (*marketdata.OptionSnapshot, e
 	})
 }
 
-func (c *Client) GetLatestQuote(symbol string) (*marketdata.Quote, error) {
+func (c *Client) GetLatestQuote(symbol string, feed marketdata.Feed) (*marketdata.Quote, error) {
 	return c.MarketData.GetLatestQuote(symbol, marketdata.GetLatestQuoteRequest{
-		Feed: marketdata.IEX,
+		Feed: feed,
 	})
 }

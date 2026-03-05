@@ -56,11 +56,12 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
   const liveCandleRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
 
   // Track what's currently loaded on the chart to detect full-load vs live-update
-  const loadedKeyRef = useRef("");    // "SYMBOL:TIMEFRAME" of loaded data
-  const loadedCountRef = useRef(0);   // number of bars loaded on chart
+  const loadedKeyRef = useRef("");    // "SYMBOL:TIMEFRAME:EXT" of loaded data
+  // Track the latest time that has a "real" (volume > 0) bar — prevents backward updates
+  const lastFinalizedTimeRef = useRef(0);
 
   const { currentSymbol, bars, latestQuote, isStale } = useMarketStore();
-  const { defaultTimeframe, setDefaultTimeframe } = useSettingsStore();
+  const { defaultTimeframe, setDefaultTimeframe, showExtendedHours } = useSettingsStore();
   const timeframe = defaultTimeframe;
   const setTimeframe = setDefaultTimeframe;
 
@@ -124,7 +125,7 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     };
   }, []);
 
-  // Fetch bars and load chart on symbol/timeframe change.
+  // Fetch bars and load chart on symbol/timeframe/extendedHours change.
   // Uses an abort controller so rapid switching cancels stale fetches.
   useEffect(() => {
     if (!currentSymbol) return;
@@ -135,13 +136,13 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     // Clear chart immediately
     liveCandleRef.current = null;
     loadedKeyRef.current = "";
-    loadedCountRef.current = 0;
+    lastFinalizedTimeRef.current = 0;
     if (series) series.setData([]);
 
     const abortCtrl = new AbortController();
 
     rest
-      .getBars(currentSymbol, timeframe)
+      .getBars(currentSymbol, timeframe, showExtendedHours)
       .then((data) => {
         if (abortCtrl.signal.aborted) return;
         if (!data || !Array.isArray(data) || data.length === 0) return;
@@ -156,8 +157,20 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
 
         // Store bars in Zustand (for header price display and live candle logic)
         useMarketStore.getState().setBars(normalized);
-        loadedKeyRef.current = `${currentSymbol}:${timeframe}`;
-        loadedCountRef.current = normalized.length;
+        loadedKeyRef.current = `${currentSymbol}:${timeframe}:${showExtendedHours}`;
+
+        // Set lastFinalizedTimeRef to the last real bar's time
+        for (let i = normalized.length - 1; i >= 0; i--) {
+          const b = normalized[i];
+          if (b.volume > 0 || b.tradeCount > 0) {
+            lastFinalizedTimeRef.current = new Date(b.timestamp).getTime();
+            break;
+          }
+        }
+        // If no real bar found, use last bar's time anyway
+        if (lastFinalizedTimeRef.current === 0 && normalized.length > 0) {
+          lastFinalizedTimeRef.current = new Date(normalized[normalized.length - 1].timestamp).getTime();
+        }
       })
       .catch((err) => {
         if (abortCtrl.signal.aborted) return;
@@ -167,34 +180,34 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     return () => {
       abortCtrl.abort();
     };
-  }, [currentSymbol, timeframe]);
+  }, [currentSymbol, timeframe, showExtendedHours]);
 
-  // Sync chart when bars change from live updates (addBar from WS or quote engine).
-  // Only runs for incremental updates — full loads are handled above.
+  // Sync chart when bars change from live WS bar updates.
+  // Only handles REAL bars (volume > 0). Synthetic quote-based bars are ignored —
+  // the live candle effect below handles those.
   const syncBars = useCallback(() => {
     const series = seriesRef.current;
     if (!series) return;
 
     const currentBars = useMarketStore.getState().bars;
-    const currentKey = `${currentSymbol}:${timeframe}`;
+    const currentKey = `${currentSymbol}:${timeframe}:${showExtendedHours}`;
 
     // Skip if this isn't the currently loaded dataset
     if (loadedKeyRef.current !== currentKey) return;
-    // Skip if bars count hasn't changed (no new bar added)
-    if (currentBars.length <= loadedCountRef.current) {
-      // Same count — might be an in-place update of the last bar
-      if (currentBars.length > 0 && currentBars.length === loadedCountRef.current) {
-        const lastBar = currentBars[currentBars.length - 1];
-        series.update(barToCandle(lastBar));
-      }
-      return;
-    }
+    if (currentBars.length === 0) return;
 
-    // New bar added — update chart and count
     const lastBar = currentBars[currentBars.length - 1];
+    const isSynthetic = lastBar.volume === 0 && lastBar.tradeCount === 0;
+
+    // Skip synthetic bars — live candle effect handles those
+    if (isSynthetic) return;
+
+    // Real WS bar: push to chart, update finalized time, clear live candle
+    const barTime = new Date(lastBar.timestamp).getTime();
     series.update(barToCandle(lastBar));
-    loadedCountRef.current = currentBars.length;
-  }, [currentSymbol, timeframe]);
+    lastFinalizedTimeRef.current = barTime;
+    liveCandleRef.current = null;
+  }, [currentSymbol, timeframe, showExtendedHours]);
 
   // Subscribe to bar changes in the store
   useEffect(() => {
@@ -207,6 +220,9 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
 
     const storeSymbol = useMarketStore.getState().currentSymbol;
     if (latestQuote.symbol !== storeSymbol) return;
+
+    // Skip live candle building for 1D timeframe (daily candles only make sense after close)
+    if (timeframe === "1D") return;
 
     const storeBars = useMarketStore.getState().bars;
     if (storeBars.length === 0) return;
@@ -225,14 +241,16 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     const bucketStart = Math.floor(quoteTime / bucketMs) * bucketMs;
     const bucketISO = new Date(bucketStart).toISOString();
 
+    // Guard: discard if bucket is before the last finalized (real) bar
+    if (bucketStart < lastFinalizedTimeRef.current) return;
+
     const lc = liveCandleRef.current;
 
-    // Discard quotes older than the current live candle (can happen with
-    // multiple data sources like Tiingo + Finnhub sending slightly delayed data)
+    // Guard: discard if bucket is before the current live candle (out-of-order from multiple sources)
     if (lc && bucketStart < lc.time) return;
 
     if (lc && bucketStart > lc.time) {
-      // New candle period — start fresh
+      // New candle period — finalize old live candle, start fresh
       liveCandleRef.current = { time: bucketStart, open: mid, high: mid, low: mid, close: mid };
       useMarketStore.getState().addBar({
         symbol: storeSymbol,
@@ -250,7 +268,7 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
         open: lc.open, high: lc.high, low: lc.low, close: mid,
       });
     } else {
-      // No live candle yet — determine if we need a new one or update last bar
+      // No live candle yet — seed from last bar or create new
       const lastBar = storeBars[storeBars.length - 1];
       const lastBarBucket = Math.floor(new Date(lastBar.timestamp).getTime() / bucketMs) * bucketMs;
 
@@ -264,7 +282,7 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
           volume: 0, tradeCount: 0, vwap: 0,
         });
       } else {
-        // Same period as last bar — update it visually + start tracking
+        // Same period as last bar — continue it (seed from last bar's OHLC)
         liveCandleRef.current = {
           time: lastBarBucket,
           open: lastBar.open,
@@ -295,7 +313,7 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
       if (quoteAge < 5000) return;
 
       try {
-        const data = await rest.getQuote(currentSymbol);
+        const data = await rest.getQuote(currentSymbol, showExtendedHours);
         if (!data || !data.bp || !data.ap) return;
         // Only update if still the same symbol
         if (useMarketStore.getState().currentSymbol !== currentSymbol) return;
@@ -313,7 +331,7 @@ export function Chart({ pnlProjections, stopLossUnderlying, trailStartUnderlying
     }, 5000);
 
     return () => clearInterval(timer);
-  }, [currentSymbol]);
+  }, [currentSymbol, showExtendedHours]);
 
   // P&L projection lines
   useEffect(() => {

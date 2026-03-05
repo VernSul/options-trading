@@ -10,11 +10,17 @@ import (
 	"github.com/alpacahq/alpaca-trade-api-go/v3/alpaca"
 )
 
+type pendingFill struct {
+	orderID     string
+	filledPrice decimal.Decimal
+}
+
 type OrderManager struct {
 	mu             sync.Mutex
 	trading        *alpaca.Client
-	pendingStops   map[string]*PendingStopLoss  // entryOrderID -> stop config
-	trailingStops  map[string]*TrailingStop      // entryOrderID -> trailing stop
+	pendingStops   map[string]*PendingStopLoss // entryOrderID -> stop config
+	trailingStops  map[string]*TrailingStop    // entryOrderID -> trailing stop
+	earlyFills     map[string]pendingFill      // fills that arrived before config was stored
 	OnStopPlaced   func(orderID string, stop *alpaca.Order)
 	OnTrailingInit func(ts *TrailingStop)
 }
@@ -24,6 +30,7 @@ func NewOrderManager(trading *alpaca.Client) *OrderManager {
 		trading:       trading,
 		pendingStops:  make(map[string]*PendingStopLoss),
 		trailingStops: make(map[string]*TrailingStop),
+		earlyFills:    make(map[string]pendingFill),
 	}
 }
 
@@ -49,7 +56,6 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 	}
 
 	om.mu.Lock()
-	defer om.mu.Unlock()
 
 	if req.StopLoss != nil {
 		om.pendingStops[order.ID] = &PendingStopLoss{
@@ -63,7 +69,7 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 	}
 
 	if req.TrailingStop != nil {
-		om.trailingStops[order.ID] = &TrailingStop{
+		ts := &TrailingStop{
 			OrderID:       order.ID,
 			Symbol:        req.Symbol,
 			Qty:           req.Qty,
@@ -73,8 +79,24 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 			OffsetPercent: req.TrailingStop.OffsetPercent,
 			Active:        false,
 		}
+		om.trailingStops[order.ID] = ts
 		log.Printf("Queued trailing stop for order %s startPercent=%s offsetPercent=%s safety=%s",
 			order.ID, req.TrailingStop.StartPercent, req.TrailingStop.OffsetPercent, req.TrailingStop.SafetyStop)
+	}
+
+	// Check if a fill already arrived while we were placing the order (race condition
+	// with market orders that fill near-instantly). Replay the fill now that config is stored.
+	var earlyFill *pendingFill
+	if ef, ok := om.earlyFills[order.ID]; ok {
+		earlyFill = &ef
+		delete(om.earlyFills, order.ID)
+		log.Printf("Replaying early fill for order %s price=%s", order.ID, ef.filledPrice)
+	}
+
+	om.mu.Unlock()
+
+	if earlyFill != nil {
+		om.HandleFill(earlyFill.orderID, earlyFill.filledPrice)
 	}
 
 	return order, nil
@@ -97,6 +119,15 @@ func (om *OrderManager) HandleFill(orderID string, filledPrice decimal.Decimal) 
 		// Stay inactive — engine will activate when price reaches start threshold
 		ts.Active = false
 		trailingStop = ts
+	}
+
+	// If neither stop-loss nor trailing stop found, this fill arrived before
+	// PlaceSmartOrder stored the config. Buffer it for replay.
+	if pendingStop == nil && trailingStop == nil {
+		om.earlyFills[orderID] = pendingFill{orderID: orderID, filledPrice: filledPrice}
+		om.mu.Unlock()
+		log.Printf("Fill arrived before config stored, buffering: order=%s price=%s", orderID, filledPrice)
+		return
 	}
 
 	om.mu.Unlock()

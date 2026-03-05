@@ -187,6 +187,20 @@ export function SettingsPanel() {
               <option value="off">Off</option>
             </select>
           </label>
+
+          <label className="setting-item">
+            <span>Ext. Hours</span>
+            <select
+              className="select"
+              value={settings.showExtendedHours ? "on" : "off"}
+              onChange={(e) =>
+                settings.setShowExtendedHours(e.target.value === "on")
+              }
+            >
+              <option value="off">Off</option>
+              <option value="on">On</option>
+            </select>
+          </label>
         </div>
       )}
     </div>

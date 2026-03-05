@@ -6,19 +6,29 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"cloud.google.com/go/civil"
 	"github.com/alpacahq/alpaca-trade-api-go/v3/marketdata"
+	"github.com/go-chi/chi/v5"
 )
 
 func (s *Server) HandleGetQuote(w http.ResponseWriter, r *http.Request) {
 	symbol := chi.URLParam(r, "symbol")
 
-	quote, err := s.Alpaca.GetLatestQuote(symbol)
+	feed := marketdata.IEX
+	if r.URL.Query().Get("extendedHours") == "true" {
+		feed = marketdata.SIP
+	}
+
+	quote, err := s.Alpaca.GetLatestQuote(symbol, feed)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		// Fallback to IEX if SIP fails
+		if feed == marketdata.SIP {
+			quote, err = s.Alpaca.GetLatestQuote(symbol, marketdata.IEX)
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	json.NewEncoder(w).Encode(quote)
 }

@@ -293,16 +293,38 @@ func (s *Server) HandleGetBars(w http.ResponseWriter, r *http.Request) {
 		timeframe = marketdata.OneDay
 	}
 
+	// Dynamic lookback by timeframe
 	end := time.Now()
-	start := end.Add(-24 * time.Hour)
-	if tf == "1D" {
+	var start time.Time
+	switch tf {
+	case "5Min":
+		start = end.Add(-3 * 24 * time.Hour)
+	case "15Min":
+		start = end.Add(-5 * 24 * time.Hour)
+	case "1H":
+		start = end.Add(-10 * 24 * time.Hour)
+	case "1D":
 		start = end.AddDate(0, -6, 0)
+	default: // 1Min
+		start = end.Add(-24 * time.Hour)
 	}
 
-	bars, err := s.Alpaca.GetBars(symbol, timeframe, start, end, 0)
+	// Feed selection: SIP for extended hours, IEX otherwise
+	feed := marketdata.IEX
+	if r.URL.Query().Get("extendedHours") == "true" {
+		feed = marketdata.SIP
+	}
+
+	bars, err := s.Alpaca.GetBars(symbol, timeframe, start, end, 0, feed)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		// Fallback to IEX if SIP fails (user may not have SIP subscription)
+		if feed == marketdata.SIP {
+			bars, err = s.Alpaca.GetBars(symbol, timeframe, start, end, 0, marketdata.IEX)
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	json.NewEncoder(w).Encode(bars)
 }

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useStopStore } from "../../stores/useStopStore";
 import { occCompact } from "../../utils/occ";
+import { CollapsiblePanel } from "../common/CollapsiblePanel";
 
 function fmtPrice(val: string): string {
   const n = parseFloat(val);
@@ -24,10 +25,7 @@ export function StopsPanel() {
   if (stops.length === 0) return null;
 
   return (
-    <div className="panel stops-panel">
-      <div className="panel-header">
-        <h3>Stop Monitor</h3>
-      </div>
+    <CollapsiblePanel title="Stop Monitor" className="stops-panel">
       <div className="panel-table-wrap">
       <table className="panel-table">
         <thead>
@@ -84,6 +82,6 @@ export function StopsPanel() {
         </tbody>
       </table>
       </div>
-    </div>
+    </CollapsiblePanel>
   );
 }

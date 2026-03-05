@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useAccountStore } from "../../stores/useAccountStore";
 import { usePositionStore } from "../../stores/usePositionStore";
 import { formatPrice } from "../../utils/format";
+import { CollapsiblePanel } from "../common/CollapsiblePanel";
 
 export function AccountPanel() {
   const { account, loading, fetchAccount } = useAccountStore();
@@ -22,8 +23,7 @@ export function AccountPanel() {
   if (!account) return <div className="panel">Failed to load account</div>;
 
   return (
-    <div className="panel account-panel">
-      <h3>Account</h3>
+    <CollapsiblePanel title="Account" className="account-panel">
       <div className="account-grid">
         <div className="account-item">
           <span className="label">Equity</span>
@@ -52,6 +52,6 @@ export function AccountPanel() {
           </span>
         </div>
       </div>
-    </div>
+    </CollapsiblePanel>
   );
 }

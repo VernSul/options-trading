@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useWSStore } from "../../stores/useWSStore";
 import { showToast } from "../common/Toast";
+import { CollapsiblePanel } from "../common/CollapsiblePanel";
 import type { SmartOrderRequest } from "../../types";
 
 interface Props {
@@ -130,9 +131,8 @@ export function OrderEntry({
   };
 
   return (
-    <form className="order-entry" onSubmit={handleSubmit}>
-      <h3>Place Order</h3>
-
+    <CollapsiblePanel title="Place Order" className="order-entry">
+    <form onSubmit={handleSubmit}>
       <div className="form-row">
         <input
           type="text"
@@ -276,5 +276,6 @@ export function OrderEntry({
           : `${side.toUpperCase()} ${computedQty} ${symbol || "..."}`}
       </button>
     </form>
+    </CollapsiblePanel>
   );
 }

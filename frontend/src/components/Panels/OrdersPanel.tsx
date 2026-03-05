@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useOrderStore } from "../../stores/useOrderStore";
 import { formatPrice, formatQty } from "../../utils/format";
 import { occCompact } from "../../utils/occ";
+import { CollapsiblePanel } from "../common/CollapsiblePanel";
 
 function intentShort(intent: string): string {
   switch (intent) {
@@ -37,15 +38,20 @@ export function OrdersPanel() {
   };
 
   return (
-    <div className="panel orders-panel">
-      <div className="panel-header">
-        <h3>Orders {loading && <span className="loading">...</span>}</h3>
-        {orders.length > 0 && (
-          <button className="btn btn-small btn-danger" onClick={handleCancelAll}>
+    <CollapsiblePanel
+      title={`Orders${loading ? " ..." : ""}`}
+      className="orders-panel"
+      headerRight={
+        orders.length > 0 ? (
+          <button
+            className="btn btn-small btn-danger"
+            onClick={(e) => { e.stopPropagation(); handleCancelAll(); }}
+          >
             Cancel All
           </button>
-        )}
-      </div>
+        ) : undefined
+      }
+    >
       {orders.length === 0 ? (
         <div className="empty">No open orders</div>
       ) : (
@@ -103,6 +109,6 @@ export function OrdersPanel() {
         </table>
         </div>
       )}
-    </div>
+    </CollapsiblePanel>
   );
 }

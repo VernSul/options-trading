@@ -58,7 +58,7 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
   border-right: 1px solid var(--border);
 }
 
@@ -184,8 +184,19 @@ body {
   margin-bottom: 8px;
 }
 
+.panel-header.clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
 .panel-header h3 {
   margin-bottom: 0;
+}
+
+.panel-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .panel-table {
@@ -660,12 +671,7 @@ body {
   font-weight: 600;
 }
 
-/* Settings Panel */
-.settings-panel .panel-header {
-  cursor: pointer;
-  user-select: none;
-}
-
+/* Collapse Icon */
 .collapse-icon {
   font-size: 14px;
   color: var(--text-secondary);

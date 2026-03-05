@@ -6,6 +6,7 @@ import { useWSStore } from "../../stores/useWSStore";
 import { formatPrice, formatPL, formatPercent, formatQty } from "../../utils/format";
 import { occCompact } from "../../utils/occ";
 import { showToast } from "../common/Toast";
+import { CollapsiblePanel } from "../common/CollapsiblePanel";
 
 export function PositionsPanel() {
   const { positions, loading, fetchPositions } = usePositionStore();
@@ -44,15 +45,20 @@ export function PositionsPanel() {
   };
 
   return (
-    <div className="panel positions-panel">
-      <div className="panel-header">
-        <h3>Positions {loading && <span className="loading">...</span>}</h3>
-        {positions.length > 0 && (
-          <button className="btn btn-small btn-danger" onClick={handleCloseAll}>
+    <CollapsiblePanel
+      title={`Positions${loading ? " ..." : ""}`}
+      className="positions-panel"
+      headerRight={
+        positions.length > 0 ? (
+          <button
+            className="btn btn-small btn-danger"
+            onClick={(e) => { e.stopPropagation(); handleCloseAll(); }}
+          >
             Close All
           </button>
-        )}
-      </div>
+        ) : undefined
+      }
+    >
       {positions.length === 0 ? (
         <div className="empty">No open positions</div>
       ) : (
@@ -104,6 +110,6 @@ export function PositionsPanel() {
         </table>
         </div>
       )}
-    </div>
+    </CollapsiblePanel>
   );
 }

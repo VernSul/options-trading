@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { rest } from "../../api/rest";
 import { occCompact } from "../../utils/occ";
+import { CollapsiblePanel } from "../common/CollapsiblePanel";
 import type { TradeRecord } from "../../types";
 
 function formatTime(iso: string | null): string {
@@ -59,19 +60,23 @@ export function TradesPanel() {
   const closedTrades = trades.filter((t) => t.status === "closed");
   const totalPnL = closedTrades.reduce((sum, t) => sum + parseFloat(t.pnl || "0"), 0);
 
+  const titleExtra = closedTrades.length > 0
+    ? ` (${formatPL(String(totalPnL))})`
+    : "";
+
   return (
-    <div className="panel trades-panel">
-      <div className="panel-header">
-        <h3>
-          Trades {loading && <span className="loading">...</span>}
-          {closedTrades.length > 0 && (
-            <span className={`trades-total ${totalPnL >= 0 ? "positive" : "negative"}`}>
-              {" "}({formatPL(String(totalPnL))})
-            </span>
-          )}
-        </h3>
-        <button className="btn btn-small" onClick={fetchTrades}>Refresh</button>
-      </div>
+    <CollapsiblePanel
+      title={`Trades${loading ? " ..." : ""}${titleExtra}`}
+      className="trades-panel"
+      headerRight={
+        <button
+          className="btn btn-small"
+          onClick={(e) => { e.stopPropagation(); fetchTrades(); }}
+        >
+          Refresh
+        </button>
+      }
+    >
       {trades.length === 0 ? (
         <div className="empty">No trades</div>
       ) : (
@@ -119,6 +124,6 @@ export function TradesPanel() {
         </table>
         </div>
       )}
-    </div>
+    </CollapsiblePanel>
   );
 }

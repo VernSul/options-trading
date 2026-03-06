@@ -85,8 +85,9 @@ func (om *OrderManager) PlaceSmartOrder(req SmartOrder) (*alpaca.Order, error) {
 			Symbol:        req.Symbol,
 			Qty:           req.Qty,
 			SafetyStop:    req.StopLoss.StopPrice,
-			EntryPrice:    decimal.Zero, // set on fill
-			StartPercent:  decimal.NewFromInt(999), // never activates trailing
+			StopPrice:     req.StopLoss.StopPrice, // show in monitor
+			EntryPrice:    decimal.Zero,            // set on fill
+			StartPercent:  decimal.NewFromInt(999),  // never activates trailing
 			OffsetPercent: decimal.Zero,
 			Active:        false,
 		}
@@ -136,11 +137,15 @@ func (om *OrderManager) HandleFill(orderID string, filledPrice decimal.Decimal) 
 		delete(om.takeProfits, orderID)
 	}
 
-	// If no trailing stop and no take profit configured, buffer as early fill
+	// If no trailing stop and no take profit configured, buffer as early fill.
+	// But only buffer if there's a reasonable chance this is an entry order
+	// (early fills map is checked on PlaceSmartOrder return). Don't grow unbounded.
 	if trailingStop == nil && tp == nil {
-		om.earlyFills[orderID] = pendingFill{orderID: orderID, filledPrice: filledPrice}
+		if len(om.earlyFills) < 50 {
+			om.earlyFills[orderID] = pendingFill{orderID: orderID, filledPrice: filledPrice}
+			log.Printf("Fill arrived before config stored, buffering: order=%s price=%s", orderID, filledPrice)
+		}
 		om.mu.Unlock()
-		log.Printf("Fill arrived before config stored, buffering: order=%s price=%s", orderID, filledPrice)
 		return
 	}
 

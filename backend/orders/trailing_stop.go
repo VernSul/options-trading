@@ -120,6 +120,9 @@ func (tse *TrailingStopEngine) UpdatePrice(symbol string, midPrice decimal.Decim
 }
 
 func (tse *TrailingStopEngine) fireClose(ts *TrailingStop) {
+	// Remember pre-fire state so we can restore correctly on failure
+	wasActive := ts.ExitReason == "trailing"
+
 	qty := decimal.NewFromInt(int64(ts.Qty))
 	order, err := tse.trading.PlaceOrder(alpaca.PlaceOrderRequest{
 		Symbol:         ts.Symbol,
@@ -131,10 +134,10 @@ func (tse *TrailingStopEngine) fireClose(ts *TrailingStop) {
 	})
 	if err != nil {
 		log.Printf("Trailing stop close failed: %v", err)
-		// Allow retry on next quote
+		// Allow retry on next quote — restore to correct phase
 		tse.mu.Lock()
 		ts.Fired = false
-		ts.Active = true
+		ts.Active = wasActive // safety stop was Phase 1 (Active=false), trailing was Phase 2 (Active=true)
 		tse.mu.Unlock()
 		return
 	}

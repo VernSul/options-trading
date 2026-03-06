@@ -148,13 +148,16 @@ func main() {
 	tradingStream.OnUpdate = func(tu alpacaAPI.TradeUpdate) {
 		wsHub.BroadcastMessage(hub.MsgTradeUpdate, tu)
 		if tu.Event == "fill" && tu.Price != nil {
-			orderMgr.HandleFill(tu.Order.ID, *tu.Price)
-			// When a sell-to-close fills, clean up any stops for that symbol
-			if string(tu.Order.PositionIntent) == "sell_to_close" {
+			intent := string(tu.Order.PositionIntent)
+			if intent == "sell_to_close" || intent == "buy_to_close" {
+				// Close fill — clean up stops, don't run entry fill logic
 				removed := trailingEngine.RemoveBySymbol(tu.Order.Symbol)
 				for _, ts := range removed {
 					wsHub.BroadcastMessage(hub.MsgTrailingStopFired, ts)
 				}
+			} else {
+				// Entry fill — initialize stops/take-profit
+				orderMgr.HandleFill(tu.Order.ID, *tu.Price)
 			}
 		}
 		if tu.Event == "fill" || tu.Event == "canceled" || tu.Event == "partial_fill" {

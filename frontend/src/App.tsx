@@ -14,6 +14,7 @@ import { StatusBar } from "./components/common/StatusBar";
 import { ToastContainer } from "./components/common/Toast";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { usePersistedResize } from "./hooks/usePersistedResize";
 import { useMarketStore } from "./stores/useMarketStore";
 import { useSettingsStore } from "./stores/useSettingsStore";
 import { autoSelectOption, type AutoSelectResult } from "./utils/optionSelector";
@@ -36,6 +37,7 @@ function App() {
   const [autoCallOption, setAutoCallOption] = useState<AutoOption | null>(null);
   const [autoPutOption, setAutoPutOption] = useState<AutoOption | null>(null);
   const qtyRef = useRef(1);
+  const rightColRef = usePersistedResize<HTMLDivElement>("right-column", "width");
 
   // The "main" auto-option follows the settings direction
   const settings = useSettingsStore();
@@ -210,7 +212,7 @@ function App() {
           <TradesPanel />
         </div>
 
-        <div className="right-column">
+        <div className="right-column" ref={rightColRef}>
           <AccountPanel />
           <SettingsPanel />
           <OrderEntry

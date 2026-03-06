@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useMarketStore } from "../../stores/useMarketStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useOptionsChain } from "../../hooks/useOptionsChain";
+import { usePersistedResize } from "../../hooks/usePersistedResize";
 import { parseOCC } from "../../utils/occ";
 import { formatPrice } from "../../utils/format";
 import { rest } from "../../api/rest";
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function OptionsChain({ onSelectContract, onAutoSelect, onChainReady }: Props) {
+  const chainRef = usePersistedResize<HTMLDivElement>("options-chain", "height");
   const { currentSymbol, latestQuote, bars } = useMarketStore();
   const settings = useSettingsStore();
   const {
@@ -168,7 +170,7 @@ export function OptionsChain({ onSelectContract, onAutoSelect, onChainReady }: P
   };
 
   return (
-    <div className="options-chain">
+    <div className="options-chain" ref={chainRef}>
       <div className="chain-controls">
         <h3>Options Chain — {currentSymbol}</h3>
         {(() => {

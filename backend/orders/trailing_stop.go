@@ -157,6 +157,22 @@ func (tse *TrailingStopEngine) Remove(orderID string) {
 	delete(tse.stops, orderID)
 }
 
+// RemoveBySymbol removes all stops for a given symbol and returns removed stops.
+// Called when a position is closed externally (manual, take-profit, etc.)
+func (tse *TrailingStopEngine) RemoveBySymbol(symbol string) []*TrailingStop {
+	tse.mu.Lock()
+	defer tse.mu.Unlock()
+	var removed []*TrailingStop
+	for id, ts := range tse.stops {
+		if ts.Symbol == symbol {
+			log.Printf("Removing stop for closed position: order=%s symbol=%s", id, symbol)
+			removed = append(removed, ts)
+			delete(tse.stops, id)
+		}
+	}
+	return removed
+}
+
 // GetAll returns all currently tracked stops (active, inactive, and standalone stop-losses).
 func (tse *TrailingStopEngine) GetAll() []*TrailingStop {
 	tse.mu.Lock()

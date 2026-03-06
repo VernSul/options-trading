@@ -149,6 +149,13 @@ func main() {
 		wsHub.BroadcastMessage(hub.MsgTradeUpdate, tu)
 		if tu.Event == "fill" && tu.Price != nil {
 			orderMgr.HandleFill(tu.Order.ID, *tu.Price)
+			// When a sell-to-close fills, clean up any stops for that symbol
+			if string(tu.Order.PositionIntent) == "sell_to_close" {
+				removed := trailingEngine.RemoveBySymbol(tu.Order.Symbol)
+				for _, ts := range removed {
+					wsHub.BroadcastMessage(hub.MsgTrailingStopFired, ts)
+				}
+			}
 		}
 		if tu.Event == "fill" || tu.Event == "canceled" || tu.Event == "partial_fill" {
 			go func() {

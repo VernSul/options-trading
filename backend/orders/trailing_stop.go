@@ -123,6 +123,10 @@ func (tse *TrailingStopEngine) fireClose(ts *TrailingStop) {
 	// Remember pre-fire state so we can restore correctly on failure
 	wasActive := ts.ExitReason == "trailing"
 
+	// Cancel any existing orders for this symbol (e.g. take-profit limit orders)
+	// that would conflict with our market sell-to-close
+	tse.cancelOrdersForSymbol(ts.Symbol)
+
 	qty := decimal.NewFromInt(int64(ts.Qty))
 	order, err := tse.trading.PlaceOrder(alpaca.PlaceOrderRequest{
 		Symbol:         ts.Symbol,
@@ -151,6 +155,28 @@ func (tse *TrailingStopEngine) fireClose(ts *TrailingStop) {
 
 	if tse.OnFired != nil {
 		tse.OnFired(ts)
+	}
+}
+
+// cancelOrdersForSymbol cancels all open orders for a symbol.
+// This is needed before placing a close order because Alpaca rejects
+// a sell-to-close if there's already a pending sell-to-close (e.g. take-profit).
+func (tse *TrailingStopEngine) cancelOrdersForSymbol(symbol string) {
+	orders, err := tse.trading.GetOrders(alpaca.GetOrdersRequest{
+		Status:  "open",
+		Symbols: []string{symbol},
+		Limit:   50,
+	})
+	if err != nil {
+		log.Printf("Failed to get orders for %s: %v", symbol, err)
+		return
+	}
+	for _, o := range orders {
+		if err := tse.trading.CancelOrder(o.ID); err != nil {
+			log.Printf("Failed to cancel order %s for %s: %v", o.ID, symbol, err)
+		} else {
+			log.Printf("Cancelled order %s (%s) for stop close of %s", o.ID, o.Type, symbol)
+		}
 	}
 }
 

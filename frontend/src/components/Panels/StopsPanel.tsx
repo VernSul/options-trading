@@ -22,10 +22,11 @@ export function StopsPanel() {
     return () => clearInterval(interval);
   }, [fetchStops]);
 
-  if (stops.length === 0) return null;
-
   return (
     <CollapsiblePanel id="stops" title="Stop Monitor" className="stops-panel">
+      {stops.length === 0 ? (
+        <div className="empty">No active stops</div>
+      ) : (
       <div className="panel-table-wrap">
       <table className="panel-table">
         <thead>
@@ -82,6 +83,7 @@ export function StopsPanel() {
         </tbody>
       </table>
       </div>
+      )}
     </CollapsiblePanel>
   );
 }
